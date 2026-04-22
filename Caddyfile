@@ -1,9 +1,10 @@
 {
     admin off
+    default_sni {$APP_DOMAIN}
 }
 
 # ── HTTPS (self-signed internal TLS) ──────────────────────────────────────
-{$APP_DOMAIN} {
+https://{$APP_DOMAIN} {
 
     tls /certs/cert.pem /certs/key.pem
 
