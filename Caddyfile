@@ -1,0 +1,44 @@
+{
+    admin off
+    # Let's Encrypt contact for cert expiry notices
+    email ntsako@cenfri.org
+}
+
+# ── HTTPS (automatic TLS via Let's Encrypt) ────────────────────────────────
+{env.APP_DOMAIN} {
+
+    # ── Security headers ───────────────────────────────────────────────────
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options   "nosniff"
+        X-Frame-Options          "DENY"
+        X-XSS-Protection         "1; mode=block"
+        Referrer-Policy          "strict-origin-when-cross-origin"
+        Permissions-Policy       "camera=(), microphone=(), geolocation=()"
+        # Strip server fingerprinting
+        -Server
+        -X-Powered-By
+    }
+
+    # ── API → FastAPI backend ──────────────────────────────────────────────
+    handle /api/* {
+        reverse_proxy backend:8000 {
+            header_up X-Real-IP        {remote_host}
+            header_up X-Forwarded-For  {remote_host}
+            header_up X-Forwarded-Proto https
+        }
+    }
+
+    # ── SPA → nginx frontend container ────────────────────────────────────
+    handle {
+        reverse_proxy frontend:80
+    }
+
+    # ── Access log (rolled at 10 MB, keep last 5) ──────────────────────────
+    log {
+        output file /data/access.log {
+            roll_size 10mb
+            roll_keep 5
+        }
+    }
+}

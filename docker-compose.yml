@@ -52,14 +52,20 @@ services:
     networks:
       - vault_net
 
-  # ── Nginx (reverse proxy) ──────────────────────────────────────────────────
-  nginx:
-    image: nginx:1.27-alpine
+  # ── Caddy (auto-HTTPS reverse proxy) ────────────────────────────────────────
+  caddy:
+    image: caddy:2-alpine
     restart: unless-stopped
     ports:
-      - "3001:80"
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"   # HTTP/3
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
     volumes:
-      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
     depends_on:
       - backend
       - frontend
@@ -69,6 +75,8 @@ services:
 volumes:
   pg_data:
   uploads:
+  caddy_data:
+  caddy_config:
 
 networks:
   vault_net:
