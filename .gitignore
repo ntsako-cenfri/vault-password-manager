@@ -1,0 +1,50 @@
+# --- Environment ---
+.env
+.env.*
+!.env.example
+*.secrets
+~/.secrets
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.venv/
+venv/
+env/
+pip-log.txt
+pip-delete-this-directory.txt
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# --- Node ---
+node_modules/
+dist/
+.cache/
+*.tsbuildinfo
+coverage/
+
+# --- Docker ---
+.docker/
+
+# --- Uploads (runtime data - never commit) ---
+backend/uploads/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+*.swp
+
+# --- IDE ---
+.vscode/settings.json
+.idea/
+*.iml
