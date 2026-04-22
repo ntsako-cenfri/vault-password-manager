@@ -1,11 +1,11 @@
 {
     admin off
-    # Let's Encrypt contact for cert expiry notices
-    email ntsako@cenfri.org
 }
 
-# ── HTTPS (automatic TLS via Let's Encrypt) ────────────────────────────────
+# ── HTTPS (self-signed internal TLS) ──────────────────────────────────────
 {$APP_DOMAIN} {
+
+    tls internal
 
     # ── Security headers ───────────────────────────────────────────────────
     header {
