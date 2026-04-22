@@ -14,7 +14,7 @@ from app.repositories.vault_repository import VaultRepository
 from app.schemas.vault import CredentialFieldIn, VaultItemCreate, VaultItemUpdate
 from app.services.encryption_service import EncryptionService
 
-_FILE_TYPES = {FieldType.pem_file, FieldType.install_file, FieldType.ssh_key}
+_FILE_TYPES = {FieldType.pem_file, FieldType.install_file, FieldType.ssh_key, FieldType.custom_file}
 
 
 class VaultService:
