@@ -5,7 +5,7 @@
 # ── HTTPS (self-signed internal TLS) ──────────────────────────────────────
 {$APP_DOMAIN} {
 
-    tls internal
+    tls /certs/cert.pem /certs/key.pem
 
     # ── Security headers ───────────────────────────────────────────────────
     header {

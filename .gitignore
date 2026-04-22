@@ -5,6 +5,9 @@
 *.secrets
 ~/.secrets
 
+# --- TLS certs (generated on server, never commit private key) ---
+certs/
+
 # --- Python ---
 __pycache__/
 *.py[cod]
