@@ -27,8 +27,8 @@ class VaultService:
     # ── Listing ───────────────────────────────────────────────────────────────
 
     async def list_items(self, user: User) -> list[VaultItem]:
-        if user.role == UserRole.admin:
-            return await self._repo.list_all()
+        # Always return only the caller's own items — admins see other users' items
+        # via the dedicated /users/{id}/vault oversight endpoint, not their own vault list.
         return await self._repo.list_by_owner(str(user.id))
 
     # ── Fetch single ─────────────────────────────────────────────────────────

@@ -38,14 +38,22 @@ async def test_list_own_items(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_admin_sees_all_items(client: AsyncClient):
+async def test_admin_sees_only_own_items(client: AsyncClient):
+    """Admin's vault list shows only items they own — not other users' items."""
     await create_admin(client)
     admin_token = await login(client, "admin@vault.io", "AdminPass1")
     await register_user(client, "a@vault.io", "usera")
     user_token = await login(client, "a@vault.io", "UserPass1!")
+    # Another user creates an item — admin should NOT see it in their own vault list
     await client.post("/api/vault", json=_ITEM, headers={"Authorization": f"Bearer {user_token}"})
     resp = await client.get("/api/vault", headers={"Authorization": f"Bearer {admin_token}"})
-    assert len(resp.json()) >= 1
+    assert resp.status_code == 200
+    # Admin owns 0 items — the other user's item must not appear here
+    assert len(resp.json()) == 0
+    # Admin creates their own item — now they should see exactly 1
+    await client.post("/api/vault", json=_ITEM, headers={"Authorization": f"Bearer {admin_token}"})
+    resp2 = await client.get("/api/vault", headers={"Authorization": f"Bearer {admin_token}"})
+    assert len(resp2.json()) == 1
 
 
 @pytest.mark.asyncio
