@@ -6,11 +6,12 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Save, UserCheck, Clock, Trash2 } from 'lucide-react'
+import { ArrowLeft, Save, UserCheck, Clock, Trash2, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { vaultApi } from '@/api/vault'
 import { grantsApi } from '@/api/grants'
 import { useVaultStore } from '@/store/vaultStore'
+import { useAuthStore } from '@/store/authStore'
 import { Layout } from '@/components/layout/Layout'
 import { CredentialFieldEditor } from '@/components/vault/CredentialFieldEditor'
 import { Input, Textarea } from '@/components/ui/Input'
@@ -25,6 +26,7 @@ export default function VaultItemPage() {
   const { id } = useParams()
   const isNew = !id
   const upsert = useVaultStore((s) => s.upsert)
+  const currentUser = useAuthStore((s) => s.user)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -162,6 +164,13 @@ export default function VaultItemPage() {
     .filter((f) => FILE_FIELD_TYPES.includes(f.field_type) && f.original_filename)
     .map((f) => ({ id: f.id, label: f.label, original_filename: f.original_filename! })) ?? []
 
+  // Grantees get a read-only view — only the owner and admins can edit
+  const isReadOnly = !isNew &&
+    existingItem !== null &&
+    currentUser !== null &&
+    existingItem.owner_id !== currentUser.id &&
+    currentUser.role !== 'admin'
+
   return (
     <Layout>
       <div className="w-full max-w-2xl">
@@ -170,7 +179,12 @@ export default function VaultItemPage() {
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
             <ArrowLeft size={15} />
           </Button>
-          <h1 className="text-lg font-bold">{isNew ? 'New Vault Item' : 'Edit Item'}</h1>
+          <h1 className="text-lg font-bold">{isNew ? 'New Vault Item' : (isReadOnly ? 'View Item' : 'Edit Item')}</h1>
+          {isReadOnly && (
+            <span className="ml-auto flex items-center gap-1.5 text-xs text-vault-muted bg-vault-elevated border border-vault-border px-2.5 py-1 rounded-lg">
+              <Lock size={11} /> View only
+            </span>
+          )}
         </div>
 
         <motion.div className="flex flex-col gap-5" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
@@ -181,6 +195,7 @@ export default function VaultItemPage() {
               label="Title"
               placeholder="e.g. Production Database"
               value={title}
+              readOnly={isReadOnly}
               onChange={(e) => setTitle(e.target.value)}
               required
               autoFocus={isNew}
@@ -189,6 +204,7 @@ export default function VaultItemPage() {
               label="Description (optional)"
               placeholder="What is this for?"
               value={description}
+              readOnly={isReadOnly}
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
             />
@@ -202,12 +218,15 @@ export default function VaultItemPage() {
               onChange={setFields}
               savedFileFields={savedFileFields}
               onDownloadField={handleDownload}
+              readOnly={isReadOnly}
             />
           </div>
 
-          <Button onClick={handleSave} loading={saving} className="self-end" size="lg">
-            <Save size={16} /> {isNew ? 'Create Item' : 'Save Changes'}
-          </Button>
+          {!isReadOnly && (
+            <Button onClick={handleSave} loading={saving} className="self-end" size="lg">
+              <Save size={16} /> {isNew ? 'Create Item' : 'Save Changes'}
+            </Button>
+          )}
 
           {/* Shared with section — only shown for existing items that have grants */}
           {!isNew && grants.length > 0 && (

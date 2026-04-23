@@ -19,11 +19,13 @@ interface Props {
   /** Existing saved fields with download URLs (edit mode) */
   savedFileFields?: { id: string; label: string; original_filename: string }[]
   onDownloadField?: (fieldId: string) => void
+  /** When true: hides add/delete controls and makes all inputs read-only */
+  readOnly?: boolean
 }
 
 function uid() { return Math.random().toString(36).slice(2) }
 
-export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDownloadField }: Props) {
+export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDownloadField, readOnly = false }: Props) {
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const add = () =>
@@ -60,8 +62,9 @@ export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDow
                   </label>
                   <select
                     value={field.field_type}
-                    onChange={(e) => update(field._key, { field_type: e.target.value as FieldType, value: '', file: undefined })}
-                    className="bg-vault-elevated border border-vault-border text-vault-text text-sm rounded-lg px-3 py-2 outline-none focus:border-vault-primary"
+                    disabled={readOnly}
+                    onChange={(e) => !readOnly && update(field._key, { field_type: e.target.value as FieldType, value: '', file: undefined })}
+                    className="bg-vault-elevated border border-vault-border text-vault-text text-sm rounded-lg px-3 py-2 outline-none focus:border-vault-primary disabled:opacity-60 disabled:cursor-default"
                   >
                     {FIELD_TYPES.map(([val, label]) => (
                       <option key={val} value={val}>{label}</option>
@@ -74,14 +77,17 @@ export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDow
                     label="Label / Description"
                     placeholder={`e.g. ${FIELD_TYPE_LABELS[field.field_type]}`}
                     value={field.label}
+                    readOnly={readOnly}
                     onChange={(e) => update(field._key, { label: e.target.value })}
                     required
                   />
                 </div>
 
-                <Button variant="danger" size="sm" onClick={() => remove(field._key)} className="mb-0.5 shrink-0">
-                  <Trash2 size={14} />
-                </Button>
+                {!readOnly && (
+                  <Button variant="danger" size="sm" onClick={() => remove(field._key)} className="mb-0.5 shrink-0">
+                    <Trash2 size={14} />
+                  </Button>
+                )}
               </div>
 
               {/* Row 2: value or file upload */}
@@ -114,6 +120,7 @@ export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDow
                   type={field.field_type === 'password' ? 'password' : 'text'}
                   placeholder={field.field_type === 'password' ? '••••••••••' : 'Enter value'}
                   value={field.value}
+                  readOnly={readOnly}
                   onChange={(e) => update(field._key, { value: e.target.value })}
                   className={clsx(
                     ['password', 'api_key', 'ssh_key'].includes(field.field_type) && 'font-mono'
@@ -126,6 +133,7 @@ export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDow
                 label="Comment / Notes"
                 placeholder="Describe usage, rotation schedule, notes…"
                 value={field.comment}
+                readOnly={readOnly}
                 onChange={(e) => update(field._key, { comment: e.target.value })}
                 rows={2}
               />
@@ -151,9 +159,11 @@ export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDow
         </div>
       )}
 
-      <Button variant="outline" size="sm" onClick={add} className="self-start">
-        <Plus size={14} /> Add Field
-      </Button>
+      {!readOnly && (
+        <Button variant="outline" size="sm" onClick={add} className="self-start">
+          <Plus size={14} /> Add Field
+        </Button>
+      )}
     </div>
   )
 }
