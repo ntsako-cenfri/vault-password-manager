@@ -35,7 +35,7 @@ class GrantRepository:
         result = await self._db.execute(
             select(ItemGrant)
             .where(ItemGrant.vault_item_id == item_id)
-            .options(selectinload(ItemGrant.grantee))
+            .options(selectinload(ItemGrant.grantor), selectinload(ItemGrant.grantee))
             .order_by(ItemGrant.created_at.desc())
         )
         return list(result.scalars().all())
@@ -48,10 +48,12 @@ class GrantRepository:
 
     async def find_by_item_and_email(self, item_id: str, email: str) -> ItemGrant | None:
         result = await self._db.execute(
-            select(ItemGrant).where(
+            select(ItemGrant)
+            .where(
                 ItemGrant.vault_item_id == item_id,
                 func.lower(ItemGrant.granted_to_email) == email.lower(),
             )
+            .options(selectinload(ItemGrant.grantor), selectinload(ItemGrant.grantee))
         )
         return result.scalar_one_or_none()
 
@@ -65,18 +67,24 @@ class GrantRepository:
         )
         return list(result.scalars().all())
 
+    async def _reload_with_relations(self, grant_id) -> ItemGrant:
+        result = await self._db.execute(
+            select(ItemGrant)
+            .where(ItemGrant.id == grant_id)
+            .options(selectinload(ItemGrant.grantor), selectinload(ItemGrant.grantee))
+        )
+        return result.scalar_one()
+
     async def create(self, **kwargs) -> ItemGrant:
         grant = ItemGrant(**kwargs)
         self._db.add(grant)
         await self._db.flush()
-        await self._db.refresh(grant)
-        return grant
+        return await self._reload_with_relations(grant.id)
 
     async def save(self, grant: ItemGrant) -> ItemGrant:
         self._db.add(grant)
         await self._db.flush()
-        await self._db.refresh(grant)
-        return grant
+        return await self._reload_with_relations(grant.id)
 
     async def delete(self, grant: ItemGrant) -> None:
         await self._db.delete(grant)

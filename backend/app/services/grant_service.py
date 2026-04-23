@@ -33,7 +33,7 @@ class GrantService:
                 target_user = await self._user_repo.get_by_email(email)
                 if target_user:
                     existing.granted_to_id = target_user.id
-                    await self._grant_repo.save(existing)
+                    existing = await self._grant_repo.save(existing)
             return existing
         target_user = await self._user_repo.get_by_email(email)
         return await self._grant_repo.create(
