@@ -66,6 +66,7 @@ export interface CredentialField {
 // Draft — used in the form before it's saved
 export interface CredentialFieldDraft {
   _key: string // local UI key only
+  savedId?: string // set when loaded from server — undefined means it's a new unsaved field
   field_type: FieldType
   label: string
   value: string

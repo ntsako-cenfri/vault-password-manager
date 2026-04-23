@@ -47,6 +47,7 @@ export default function VaultItemPage() {
       const textFields = data.fields.filter((f) => !FILE_FIELD_TYPES.includes(f.field_type))
       setFields(textFields.map((f) => ({
         _key: uid(),
+        savedId: f.id, // track server ID so we know these are pre-existing
         field_type: f.field_type,
         label: f.label,
         value: f.value ?? '',
@@ -121,8 +122,17 @@ export default function VaultItemPage() {
           await vaultApi.uploadField(id!, form)
         }
 
-        // Add new text fields
-        for (const f of fields.filter((fd) => !FILE_FIELD_TYPES.includes(fd.field_type) && fd.value)) {
+        // Delete fields that were removed in the editor
+        const keptSavedIds = new Set(fields.filter((fd) => fd.savedId).map((fd) => fd.savedId!))
+        const deletedIds = (existingItem?.fields ?? [])
+          .filter((sf) => !FILE_FIELD_TYPES.includes(sf.field_type) && !keptSavedIds.has(sf.id))
+          .map((sf) => sf.id)
+        for (const fid of deletedIds) {
+          await vaultApi.deleteField(id!, fid)
+        }
+
+        // Only add brand-new fields (no savedId means the user just added them)
+        for (const f of fields.filter((fd) => !FILE_FIELD_TYPES.includes(fd.field_type) && !fd.savedId)) {
           await vaultApi.addField(id!, { field_type: f.field_type, label: f.label, value: f.value, comment: f.comment, order: f.order })
         }
 
