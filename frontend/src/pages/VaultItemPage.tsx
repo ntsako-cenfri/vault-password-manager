@@ -14,6 +14,7 @@ import { useVaultStore } from '@/store/vaultStore'
 import { useAuthStore } from '@/store/authStore'
 import { Layout } from '@/components/layout/Layout'
 import { CredentialFieldEditor } from '@/components/vault/CredentialFieldEditor'
+import { FilePreviewModal } from '@/components/vault/FilePreviewModal'
 import { Input, Textarea } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { FILE_FIELD_TYPES } from '@/types'
@@ -36,6 +37,7 @@ export default function VaultItemPage() {
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
   const [grants, setGrants] = useState<ItemGrant[]>([])
+  const [preview, setPreview] = useState<{ filename: string; content: string; fieldId: string } | null>(null)
 
   // Load existing item in edit mode
   useEffect(() => {
@@ -173,6 +175,18 @@ export default function VaultItemPage() {
     }
   }
 
+  const handlePreview = async (fieldId: string) => {
+    if (!id) return
+    try {
+      const { data } = await vaultApi.downloadField(id, fieldId)
+      const field = existingItem?.fields.find((f) => f.id === fieldId)
+      const text = await new Blob([data]).text()
+      setPreview({ filename: field?.original_filename ?? 'file', content: text, fieldId })
+    } catch {
+      toast.error('Preview failed')
+    }
+  }
+
   if (loading) {
     return (
       <Layout>
@@ -195,6 +209,7 @@ export default function VaultItemPage() {
     currentUser.role !== 'admin'
 
   return (
+    <>
     <Layout>
       <div className="w-full max-w-2xl">
         {/* Header */}
@@ -241,6 +256,7 @@ export default function VaultItemPage() {
               onChange={setFields}
               savedFileFields={savedFileFields}
               onDownloadField={handleDownload}
+              onPreviewField={handlePreview}
               readOnly={isReadOnly}
             />
           </div>
@@ -292,5 +308,15 @@ export default function VaultItemPage() {
         </motion.div>
       </div>
     </Layout>
-  )
+
+      {preview && (
+        <FilePreviewModal
+          open
+          onClose={() => setPreview(null)}
+          filename={preview.filename}
+          content={preview.content}
+          onDownload={() => { handleDownload(preview.fieldId); setPreview(null) }}
+        />
+      )}
+    </>
 }

@@ -4,12 +4,13 @@
  */
 import { useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Trash2, Download } from 'lucide-react'
+import { Plus, Trash2, Download, Eye } from 'lucide-react'
 import { clsx } from 'clsx'
 import { Button } from '@/components/ui/Button'
 import { Input, Textarea } from '@/components/ui/Input'
 import type { CredentialFieldDraft, FieldType } from '@/types'
 import { FIELD_TYPE_LABELS, FILE_FIELD_TYPES } from '@/types'
+import { isPreviewable } from './FilePreviewModal'
 
 const FIELD_TYPES = Object.entries(FIELD_TYPE_LABELS) as [FieldType, string][]
 
@@ -19,13 +20,14 @@ interface Props {
   /** Existing saved fields with download URLs (edit mode) */
   savedFileFields?: { id: string; label: string; original_filename: string }[]
   onDownloadField?: (fieldId: string) => void
+  onPreviewField?: (fieldId: string) => void
   /** When true: hides add/delete controls and makes all inputs read-only */
   readOnly?: boolean
 }
 
 function uid() { return Math.random().toString(36).slice(2) }
 
-export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDownloadField, readOnly = false }: Props) {
+export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDownloadField, onPreviewField, readOnly = false }: Props) {
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const add = () =>
@@ -151,6 +153,11 @@ export function CredentialFieldEditor({ fields, onChange, savedFileFields, onDow
               <span className="text-sm flex-1 text-vault-muted truncate">
                 <span className="text-vault-text">{f.label}</span> — {f.original_filename}
               </span>
+              {isPreviewable(f.original_filename) && (
+                <Button variant="ghost" size="sm" onClick={() => onPreviewField?.(f.id)} title="Preview">
+                  <Eye size={14} /> Preview
+                </Button>
+              )}
               <Button variant="ghost" size="sm" onClick={() => onDownloadField?.(f.id)}>
                 <Download size={14} /> Download
               </Button>
