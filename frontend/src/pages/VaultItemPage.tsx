@@ -26,6 +26,7 @@ export default function VaultItemPage() {
   const { id } = useParams()
   const isNew = !id
   const upsert = useVaultStore((s) => s.upsert)
+  const upsertShared = useVaultStore((s) => s.upsertShared)
   const currentUser = useAuthStore((s) => s.user)
 
   const [title, setTitle] = useState('')
@@ -140,7 +141,13 @@ export default function VaultItemPage() {
         item = fresh.data
       }
 
-      upsert(item)
+      // Route the saved item to the correct store bucket so it stays in the right section
+      const isOwnItem = isNew || existingItem?.owner_id === currentUser?.id
+      if (isOwnItem) {
+        upsert(item)
+      } else {
+        upsertShared(item)
+      }
       toast.success(isNew ? 'Item created' : 'Item updated')
       navigate('/dashboard')
     } catch (err: any) {

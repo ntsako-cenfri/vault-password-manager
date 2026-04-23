@@ -12,6 +12,8 @@ interface VaultState {
   fetchShared: () => Promise<void>
   remove: (id: string) => void
   upsert: (item: VaultItem) => void
+  /** Update an item that lives in sharedItems (admin editing someone else's item). */
+  upsertShared: (item: VaultItem) => void
 }
 
 export const useVaultStore = create<VaultState>((set) => ({
@@ -50,4 +52,11 @@ export const useVaultStore = create<VaultState>((set) => ({
         ? { items: s.items.map((i) => (i.id === item.id ? item : i)) }
         : { items: [item, ...s.items] }
     }),
+
+  upsertShared: (item) =>
+    set((s) => ({
+      sharedItems: s.sharedItems.map((gi) =>
+        gi.item.id === item.id ? { ...gi, item } : gi
+      ),
+    })),
 }))
