@@ -18,6 +18,18 @@ export default function DashboardPage() {
   useEffect(() => {
     fetch()
     fetchShared()
+
+    // Re-fetch shared items when the tab becomes visible again (e.g. user was on
+    // another tab while someone granted them access) and every 30 s while active.
+    const onVisible = () => { if (document.visibilityState === 'visible') fetchShared() }
+    document.addEventListener('visibilitychange', onVisible)
+
+    const poll = setInterval(fetchShared, 30_000)
+
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible)
+      clearInterval(poll)
+    }
   }, [fetch, fetchShared])
 
   const q = search.toLowerCase()
