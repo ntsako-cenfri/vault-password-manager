@@ -1,4 +1,4 @@
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -50,7 +50,7 @@ class GrantRepository:
         result = await self._db.execute(
             select(ItemGrant).where(
                 ItemGrant.vault_item_id == item_id,
-                ItemGrant.granted_to_email == email,
+                func.lower(ItemGrant.granted_to_email) == email.lower(),
             )
         )
         return result.scalar_one_or_none()
@@ -59,7 +59,7 @@ class GrantRepository:
         """Grants with no linked user yet — activated on registration."""
         result = await self._db.execute(
             select(ItemGrant).where(
-                ItemGrant.granted_to_email == email,
+                func.lower(ItemGrant.granted_to_email) == email.lower(),
                 ItemGrant.granted_to_id.is_(None),
             )
         )

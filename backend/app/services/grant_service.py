@@ -15,6 +15,7 @@ class GrantService:
         self._user_repo = UserRepository(db)
 
     async def grant_access(self, item_id: str, email: str, requester: User) -> ItemGrant:
+        email = email.lower().strip()
         item = await self._vault_repo.get_by_id(item_id)
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
@@ -27,6 +28,12 @@ class GrantService:
         # Idempotent – return existing grant
         existing = await self._grant_repo.find_by_item_and_email(item_id, email)
         if existing:
+            # If it exists but granted_to_id is still null, try to resolve the user now
+            if existing.granted_to_id is None:
+                target_user = await self._user_repo.get_by_email(email)
+                if target_user:
+                    existing.granted_to_id = target_user.id
+                    await self._grant_repo.save(existing)
             return existing
         target_user = await self._user_repo.get_by_email(email)
         return await self._grant_repo.create(

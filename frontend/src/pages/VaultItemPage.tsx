@@ -6,16 +6,17 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Save } from 'lucide-react'
+import { ArrowLeft, Save, UserCheck, Clock, Trash2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { vaultApi } from '@/api/vault'
+import { grantsApi } from '@/api/grants'
 import { useVaultStore } from '@/store/vaultStore'
 import { Layout } from '@/components/layout/Layout'
 import { CredentialFieldEditor } from '@/components/vault/CredentialFieldEditor'
 import { Input, Textarea } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { FILE_FIELD_TYPES } from '@/types'
-import type { CredentialFieldDraft, VaultItem } from '@/types'
+import type { CredentialFieldDraft, ItemGrant, VaultItem } from '@/types'
 
 function uid() { return Math.random().toString(36).slice(2) }
 
@@ -31,6 +32,7 @@ export default function VaultItemPage() {
   const [existingItem, setExistingItem] = useState<VaultItem | null>(null)
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
+  const [grants, setGrants] = useState<ItemGrant[]>([])
 
   // Load existing item in edit mode
   useEffect(() => {
@@ -50,7 +52,21 @@ export default function VaultItemPage() {
         order: f.order,
       })))
     }).catch(() => toast.error('Item not found')).finally(() => setLoading(false))
+
+    // Fetch grants (only succeeds for the owner — silently ignore 403)
+    grantsApi.listGrants(id).then(({ data }) => setGrants(data)).catch(() => {})
   }, [id])
+
+  const handleRevokeGrant = async (grantId: string) => {
+    if (!id) return
+    try {
+      await grantsApi.revokeGrant(id, grantId)
+      setGrants((prev) => prev.filter((g) => g.id !== grantId))
+      toast.success('Access revoked')
+    } catch {
+      toast.error('Failed to revoke')
+    }
+  }
 
   const handleSave = async () => {
     if (!title.trim()) { toast.error('Title is required'); return }
@@ -148,7 +164,7 @@ export default function VaultItemPage() {
 
   return (
     <Layout>
-      <div className="max-w-2xl">
+      <div className="w-full max-w-2xl">
         {/* Header */}
         <div className="flex items-center gap-3 mb-6">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>
@@ -159,7 +175,7 @@ export default function VaultItemPage() {
 
         <motion.div className="flex flex-col gap-5" initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
           {/* Metadata */}
-          <div className="glass rounded-2xl p-5 flex flex-col gap-4">
+          <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col gap-4">
             <p className="text-xs font-medium text-vault-muted uppercase tracking-wider">Details</p>
             <Input
               label="Title"
@@ -192,6 +208,45 @@ export default function VaultItemPage() {
           <Button onClick={handleSave} loading={saving} className="self-end" size="lg">
             <Save size={16} /> {isNew ? 'Create Item' : 'Save Changes'}
           </Button>
+
+          {/* Shared with section — only shown for existing items that have grants */}
+          {!isNew && grants.length > 0 && (
+            <div className="glass rounded-2xl p-4 sm:p-5 flex flex-col gap-3">
+              <p className="text-xs font-medium text-vault-muted uppercase tracking-wider">
+                Shared with ({grants.length})
+              </p>
+              {grants.map((grant) => (
+                <div
+                  key={grant.id}
+                  className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-vault-border bg-vault-elevated"
+                >
+                  <div className="shrink-0">
+                    {grant.granted_to_id ? (
+                      <UserCheck size={14} className="text-vault-success" />
+                    ) : (
+                      <Clock size={14} className="text-vault-muted" />
+                    )}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-vault-text truncate">
+                      {grant.grantee_username ?? grant.granted_to_email}
+                    </p>
+                    <p className="text-[10px] text-vault-muted">
+                      {grant.granted_to_id ? 'Active' : 'Pending registration'} · {grant.granted_to_email}
+                    </p>
+                  </div>
+                  <Button
+                    variant="danger"
+                    size="sm"
+                    onClick={() => handleRevokeGrant(grant.id)}
+                    title="Revoke access"
+                  >
+                    <Trash2 size={12} />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </motion.div>
       </div>
     </Layout>
