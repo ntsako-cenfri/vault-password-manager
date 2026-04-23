@@ -56,7 +56,13 @@ export default function VaultItemPage() {
     }).catch(() => toast.error('Item not found')).finally(() => setLoading(false))
 
     // Fetch grants (only succeeds for the owner — silently ignore 403)
-    grantsApi.listGrants(id).then(({ data }) => setGrants(data)).catch(() => {})
+    const refreshGrants = () => grantsApi.listGrants(id).then(({ data }) => setGrants(data)).catch(() => {})
+    refreshGrants()
+
+    // Re-fetch when tab regains focus so resolved "pending" grants update automatically
+    const onVisible = () => { if (document.visibilityState === 'visible') refreshGrants() }
+    document.addEventListener('visibilitychange', onVisible)
+    return () => document.removeEventListener('visibilitychange', onVisible)
   }, [id])
 
   const handleRevokeGrant = async (grantId: string) => {

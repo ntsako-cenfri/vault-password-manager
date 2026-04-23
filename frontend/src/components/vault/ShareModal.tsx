@@ -74,7 +74,8 @@ export function ShareModal({ item, open, onClose }: Props) {
       const { data } = await grantsApi.grantAccess(item.id, grantEmail.trim())
       setGrants((prev) => {
         const exists = prev.find((g) => g.id === data.id)
-        return exists ? prev : [data, ...prev]
+        // Always update with fresh server data so resolved grants stop showing "Pending"
+        return exists ? prev.map((g) => g.id === data.id ? data : g) : [data, ...prev]
       })
       setGrantEmail('')
       toast.success('Access granted')
