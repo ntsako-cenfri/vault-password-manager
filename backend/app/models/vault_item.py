@@ -32,3 +32,6 @@ class VaultItem(Base):
     share_links = relationship(
         "ShareLink", back_populates="vault_item", cascade="all, delete-orphan"
     )
+    grants = relationship(
+        "ItemGrant", back_populates="vault_item", cascade="all, delete-orphan"
+    )

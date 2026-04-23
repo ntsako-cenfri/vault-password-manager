@@ -1,13 +1,25 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.database import get_db
 from app.models.user import User
+from app.repositories.user_repository import UserRepository
+from app.schemas.grant import GrantedItemOut, UserVaultResponse
 from app.schemas.user import RoleUpdateRequest, UserOut
+from app.schemas.vault import VaultItemOut
+from app.services.encryption_service import EncryptionService
 from app.services.user_service import UserService
+from app.services.vault_service import VaultService
 from app.utils.dependencies import get_current_user, require_admin
 
 router = APIRouter(prefix="/users", tags=["users"])
+
+_enc = EncryptionService(settings.master_encryption_key)
+
+
+def _vault_svc(db: AsyncSession) -> VaultService:
+    return VaultService(db, _enc)
 
 
 @router.get("", response_model=list[UserOut])
@@ -39,3 +51,44 @@ async def toggle_active(
 ):
     svc = UserService(db)
     return await svc.toggle_active(admin, user_id)
+
+
+@router.get("/{user_id}/vault", response_model=UserVaultResponse)
+async def get_user_vault(
+    user_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin only: see a user's own items and items shared with them."""
+    target = await UserRepository(db).get_by_id(user_id)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+    vsvc = _vault_svc(db)
+    own = await vsvc._repo.list_by_owner(user_id)
+    shared_pairs = await vsvc.list_shared_items_for_user_id(user_id)
+
+    def _build(item):
+        from app.schemas.vault import CredentialFieldOut
+        decrypted = vsvc.decrypt_fields(item)
+        return VaultItemOut(
+            id=item.id,
+            owner_id=item.owner_id,
+            title=item.title,
+            description=item.description,
+            created_at=item.created_at,
+            updated_at=item.updated_at,
+            fields=[CredentialFieldOut(**f) for f in decrypted],
+        )
+
+    return UserVaultResponse(
+        own_items=[_build(i) for i in own],
+        shared_items=[
+            GrantedItemOut(
+                grant_id=g.id,
+                granted_by_username=g.grantor.username if g.grantor else "?",
+                item=_build(item),
+            )
+            for g, item in shared_pairs
+        ],
+    )
+

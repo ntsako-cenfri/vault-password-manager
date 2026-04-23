@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Search, LayoutGrid } from 'lucide-react'
+import { Plus, Search, LayoutGrid, Users } from 'lucide-react'
 import { Layout } from '@/components/layout/Layout'
 import { VaultItemCard } from '@/components/vault/VaultItemCard'
 import { ShareModal } from '@/components/vault/ShareModal'
@@ -11,15 +11,23 @@ import { useNavigate } from 'react-router-dom'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
-  const { items, loading, fetch } = useVaultStore()
+  const { items, loading, fetch, sharedItems, sharedLoading, fetchShared } = useVaultStore()
   const [search, setSearch] = useState('')
   const [shareTarget, setShareTarget] = useState<VaultItem | null>(null)
 
-  useEffect(() => { fetch() }, [fetch])
+  useEffect(() => {
+    fetch()
+    fetchShared()
+  }, [fetch, fetchShared])
 
+  const q = search.toLowerCase()
   const filtered = items.filter((i) =>
-    i.title.toLowerCase().includes(search.toLowerCase()) ||
-    i.description?.toLowerCase().includes(search.toLowerCase())
+    i.title.toLowerCase().includes(q) ||
+    i.description?.toLowerCase().includes(q)
+  )
+  const filteredShared = sharedItems.filter((gi) =>
+    gi.item.title.toLowerCase().includes(q) ||
+    gi.item.description?.toLowerCase().includes(q)
   )
 
   return (
@@ -46,14 +54,14 @@ export default function DashboardPage() {
         />
       </div>
 
-      {/* Grid */}
+      {/* My Vault */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {[...Array(6)].map((_, i) => (
             <div key={i} className="glass rounded-2xl h-40 animate-pulse" />
           ))}
         </div>
-      ) : filtered.length === 0 ? (
+      ) : filtered.length === 0 && !search ? (
         <motion.div
           className="flex flex-col items-center gap-3 py-20 text-center"
           initial={{ opacity: 0 }}
@@ -62,22 +70,59 @@ export default function DashboardPage() {
           <div className="p-5 rounded-2xl bg-vault-elevated text-vault-muted">
             <LayoutGrid size={28} />
           </div>
-          <p className="text-vault-muted text-sm">
-            {search ? 'No items match your search' : 'No items yet — create your first'}
-          </p>
-          {!search && (
-            <Button onClick={() => navigate('/vault/new')} size="sm">
-              <Plus size={14} /> New Item
-            </Button>
-          )}
+          <p className="text-vault-muted text-sm">No items yet — create your first</p>
+          <Button onClick={() => navigate('/vault/new')} size="sm">
+            <Plus size={14} /> New Item
+          </Button>
         </motion.div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          <AnimatePresence>
-            {filtered.map((item) => (
-              <VaultItemCard key={item.id} item={item} onShare={setShareTarget} />
-            ))}
-          </AnimatePresence>
+        <>
+          {filtered.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
+              <AnimatePresence>
+                {filtered.map((item) => (
+                  <VaultItemCard key={item.id} item={item} onShare={setShareTarget} />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
+          {search && filtered.length === 0 && filteredShared.length === 0 && (
+            <p className="text-vault-muted text-sm text-center py-10">No items match your search</p>
+          )}
+        </>
+      )}
+
+      {/* Shared with me */}
+      {(sharedItems.length > 0 || sharedLoading) && (
+        <div className="mt-2">
+          <div className="flex items-center gap-2 mb-4">
+            <div className="p-1.5 rounded-lg bg-vault-accent/10 text-vault-accent">
+              <Users size={14} />
+            </div>
+            <h2 className="text-sm font-semibold text-vault-text">Shared with me</h2>
+            <span className="text-xs text-vault-muted">{sharedItems.length} item{sharedItems.length !== 1 ? 's' : ''}</span>
+          </div>
+
+          {sharedLoading ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {[...Array(3)].map((_, i) => (
+                <div key={i} className="glass rounded-2xl h-40 animate-pulse" />
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              <AnimatePresence>
+                {filteredShared.map((gi) => (
+                  <VaultItemCard
+                    key={gi.grant_id}
+                    item={gi.item}
+                    readOnly
+                    sharedBy={gi.granted_by_username}
+                  />
+                ))}
+              </AnimatePresence>
+            </div>
+          )}
         </div>
       )}
 

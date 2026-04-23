@@ -1,11 +1,15 @@
 import { create } from 'zustand'
 import { vaultApi } from '@/api/vault'
-import type { VaultItem } from '@/types'
+import { grantsApi } from '@/api/grants'
+import type { VaultItem, GrantedItem } from '@/types'
 
 interface VaultState {
   items: VaultItem[]
   loading: boolean
+  sharedItems: GrantedItem[]
+  sharedLoading: boolean
   fetch: () => Promise<void>
+  fetchShared: () => Promise<void>
   remove: (id: string) => void
   upsert: (item: VaultItem) => void
 }
@@ -13,6 +17,8 @@ interface VaultState {
 export const useVaultStore = create<VaultState>((set) => ({
   items: [],
   loading: false,
+  sharedItems: [],
+  sharedLoading: false,
 
   fetch: async () => {
     set({ loading: true })
@@ -21,6 +27,16 @@ export const useVaultStore = create<VaultState>((set) => ({
       set({ items: data })
     } finally {
       set({ loading: false })
+    }
+  },
+
+  fetchShared: async () => {
+    set({ sharedLoading: true })
+    try {
+      const { data } = await grantsApi.listSharedWithMe()
+      set({ sharedItems: data })
+    } finally {
+      set({ sharedLoading: false })
     }
   },
 

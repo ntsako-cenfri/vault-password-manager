@@ -6,6 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
 from app.database import Base, engine
 from app.routers import auth, shares, users, vault
+import app.models.item_grant  # noqa: F401 – registers table with Base.metadata
 
 
 @asynccontextmanager

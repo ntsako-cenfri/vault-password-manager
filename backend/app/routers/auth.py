@@ -3,6 +3,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
 from app.models.user import User
+from app.repositories.grant_repository import GrantRepository
 from app.schemas.auth import (
     LoginRequest,
     PasswordResetRequest,
@@ -36,6 +37,12 @@ async def create_first_admin(body: SetupRequest, db: AsyncSession = Depends(get_
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
     svc = AuthService(db)
     user = await svc.register(body)
+    # Activate any pending grants that were shared to this email before registration
+    grant_repo = GrantRepository(db)
+    pending = await grant_repo.list_pending_by_email(body.email)
+    for grant in pending:
+        grant.granted_to_id = user.id
+        await grant_repo.save(grant)
     return user
 
 

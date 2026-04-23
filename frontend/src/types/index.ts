@@ -106,3 +106,26 @@ export interface ShareMeta {
   expired: boolean
   recipient_email: string | null
 }
+
+// ── Grants (persistent access) ────────────────────────────────────────────────
+export interface ItemGrant {
+  id: string
+  vault_item_id: string
+  granted_by: string
+  granted_to_id: string | null
+  granted_to_email: string
+  grantor_username: string
+  grantee_username: string | null
+  created_at: string
+}
+
+export interface GrantedItem {
+  grant_id: string
+  granted_by_username: string
+  item: VaultItem
+}
+
+export interface UserVaultResponse {
+  own_items: VaultItem[]
+  shared_items: GrantedItem[]
+}

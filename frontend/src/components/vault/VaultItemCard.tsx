@@ -12,10 +12,12 @@ import type { VaultItem } from '@/types'
 
 interface Props {
   item: VaultItem
-  onShare: (item: VaultItem) => void
+  onShare?: (item: VaultItem) => void
+  readOnly?: boolean
+  sharedBy?: string
 }
 
-export function VaultItemCard({ item, onShare }: Props) {
+export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Props) {
   const navigate = useNavigate()
   const removeFromStore = useVaultStore((s) => s.remove)
   const [revealed, setRevealed] = useState<Record<string, boolean>>({})
@@ -58,15 +60,22 @@ export function VaultItemCard({ item, onShare }: Props) {
           {item.description && (
             <p className="text-xs text-vault-muted mt-0.5 line-clamp-1">{item.description}</p>
           )}
+          {sharedBy && (
+            <p className="text-[10px] text-vault-accent mt-0.5">Shared by {sharedBy}</p>
+          )}
         </div>
-        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button variant="ghost" size="sm" onClick={() => onShare(item)} title="Share">
-            <Share2 size={14} />
-          </Button>
-          <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting} title="Delete">
-            <Trash2 size={14} />
-          </Button>
-        </div>
+        {!readOnly && (
+          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            {onShare && (
+              <Button variant="ghost" size="sm" onClick={() => onShare(item)} title="Share">
+                <Share2 size={14} />
+              </Button>
+            )}
+            <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting} title="Delete">
+              <Trash2 size={14} />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Fields preview */}

@@ -4,6 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.database import get_db
 from app.models.user import User
+from app.schemas.grant import GrantedItemOut
 from app.schemas.vault import CredentialFieldIn, VaultItemCreate, VaultItemOut, VaultItemUpdate
 from app.services.encryption_service import EncryptionService
 from app.services.vault_service import VaultService
@@ -26,6 +27,25 @@ async def list_items(
     svc = _svc(db)
     items = await svc.list_items(current_user)
     return [_build_item_out(item, svc) for item in items]
+
+
+# NOTE: /shared MUST be before /{item_id} to avoid "shared" being treated as an id
+@router.get("/shared", response_model=list[GrantedItemOut])
+async def list_shared_items(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Items that have been directly granted to the current user."""
+    svc = _svc(db)
+    pairs = await svc.list_shared_items(current_user)
+    return [
+        GrantedItemOut(
+            grant_id=grant.id,
+            granted_by_username=grant.grantor.username if grant.grantor else "?",
+            item=_build_item_out(item, svc),
+        )
+        for grant, item in pairs
+    ]
 
 
 @router.post("", response_model=VaultItemOut, status_code=201)

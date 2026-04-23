@@ -10,6 +10,7 @@ from app.config import settings
 from app.models.credential_field import FieldType
 from app.models.user import User, UserRole
 from app.models.vault_item import VaultItem
+from app.repositories.grant_repository import GrantRepository
 from app.repositories.vault_repository import VaultRepository
 from app.schemas.vault import CredentialFieldIn, VaultItemCreate, VaultItemUpdate
 from app.services.encryption_service import EncryptionService
@@ -21,6 +22,7 @@ class VaultService:
     def __init__(self, db: AsyncSession, enc: EncryptionService) -> None:
         self._repo = VaultRepository(db)
         self._enc = enc
+        self._grant_repo = GrantRepository(db)
 
     # ── Listing ───────────────────────────────────────────────────────────────
 
@@ -35,8 +37,23 @@ class VaultService:
         item = await self._repo.get_by_id(item_id)
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
-        self._assert_read_access(item, user)
+        if user.role != UserRole.admin and str(item.owner_id) != str(user.id):
+            has_grant = await self._grant_repo.has_grant(str(item.id), str(user.id))
+            if not has_grant:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return item
+
+    # ── Shared items (granted to user) ────────────────────────────────────────
+
+    async def list_shared_items(self, user: User) -> list[tuple]:
+        """Returns (ItemGrant, VaultItem) pairs for items granted to user."""
+        grants = await self._grant_repo.list_by_grantee(str(user.id))
+        return [(g, g.vault_item) for g in grants if g.vault_item]
+
+    async def list_shared_items_for_user_id(self, user_id: str) -> list[tuple]:
+        """Admin: same as above but for any user id."""
+        grants = await self._grant_repo.list_by_grantee(user_id)
+        return [(g, g.vault_item) for g in grants if g.vault_item]
 
     # ── Create ────────────────────────────────────────────────────────────────
 
@@ -190,13 +207,8 @@ class VaultService:
             order=field_data.order,
         )
 
-    def _assert_read_access(self, item: VaultItem, user: User) -> None:
-        if user.role == UserRole.admin:
-            return
-        if str(item.owner_id) != str(user.id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
-
     def _assert_write_access(self, item: VaultItem, user: User) -> None:
+        """Grants give read-only access — only owner or admin can write."""
         if user.role == UserRole.admin:
             return
         if str(item.owner_id) != str(user.id):
