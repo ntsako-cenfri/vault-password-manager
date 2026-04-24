@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Link2, Copy, Trash2, Plus, Calendar, Mail, UserPlus, UserCheck, Clock, Search, X, Check, Shield, Globe } from 'lucide-react'
+import { Link2, Copy, Trash2, Plus, Calendar, Mail, UserPlus, UserCheck, Clock, Search, X, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { sharesApi } from '@/api/shares'
 import { grantsApi } from '@/api/grants'
@@ -29,25 +29,10 @@ export function ShareModal({ item, open, onClose }: Props) {
   const [users, setUsers] = useState<User[]>([])
   const [selectedUsers, setSelectedUsers] = useState<User[]>([])
   const [userSearch, setUserSearch] = useState('')
-  const [dropdownOpen, setDropdownOpen] = useState(false)
-  const dropdownRef = useRef<HTMLDivElement>(null)
-  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // User picker state — Share Link section
   const [selectedShareUsers, setSelectedShareUsers] = useState<User[]>([])
   const [shareSearch, setShareSearch] = useState('')
-  const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
-  const shareDropdownRef = useRef<HTMLDivElement>(null)
-  const shareCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  const openShareDropdown = useCallback(() => {
-    if (shareCloseTimer.current) clearTimeout(shareCloseTimer.current)
-    setShareDropdownOpen(true)
-  }, [])
-
-  const scheduleShareClose = useCallback(() => {
-    shareCloseTimer.current = setTimeout(() => setShareDropdownOpen(false), 150)
-  }, [])
 
   const toggleShareUser = (user: User) => {
     setSelectedShareUsers((prev) =>
@@ -57,20 +42,10 @@ export function ShareModal({ item, open, onClose }: Props) {
     )
   }
 
-  const openDropdown = useCallback(() => {
-    if (closeTimer.current) clearTimeout(closeTimer.current)
-    setDropdownOpen(true)
-  }, [])
-
-  const scheduleClose = useCallback(() => {
-    closeTimer.current = setTimeout(() => setDropdownOpen(false), 150)
-  }, [])
-
   useEffect(() => {
     if (!open) {
       setSelectedShareUsers([])
       setShareSearch('')
-      setShareDropdownOpen(false)
       return
     }
     setLoadingList(true)
@@ -204,70 +179,37 @@ export function ShareModal({ item, open, onClose }: Props) {
             Select one or more users to grant permanent read access.
           </p>
 
-          {/* User picker */}
-          <div className="relative" ref={dropdownRef}>
-            <label
-              htmlFor="grant-search"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface cursor-text"
-            >
-              <Search size={13} className="text-vault-muted shrink-0" />
-              <input
-                id="grant-search"
-                type="text"
-                autoComplete="off"
-                className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
-                placeholder="Search users…"
-                value={userSearch}
-                onChange={(e) => { setUserSearch(e.target.value); openDropdown() }}
-                onClick={openDropdown}
-                onFocus={openDropdown}
-                onBlur={scheduleClose}
-              />
-            </label>
-
-            {/* Dropdown list */}
-            {dropdownOpen && (() => {
+          {/* User picker — native datalist combobox */}
+          <div>
+            {(() => {
               const alreadyGrantedIds = new Set(grants.map((g) => g.granted_to_id).filter(Boolean))
-              const filtered = users.filter((u) =>
-                !alreadyGrantedIds.has(u.id) &&
-                (u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
-                  u.email.toLowerCase().includes(userSearch.toLowerCase()))
-              )
               return (
-                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-[200] max-h-52 overflow-y-auto">
-                  {filtered.length === 0 ? (
-                    <p className="text-xs text-vault-muted text-center py-4">
-                      {loadingList ? 'Loading…' : userSearch ? 'No users match' : 'No users to share with'}
-                    </p>
-                  ) : filtered.map((user) => {
-                    const isSelected = !!selectedUsers.find((u) => u.id === user.id)
-                    return (
-                      <button
-                        key={user.id}
-                        onMouseDown={(e) => { e.preventDefault(); toggleUser(user) }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-vault-elevated text-left transition-colors"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-vault-text">{user.username}</p>
-                          <p className="text-[10px] text-vault-muted">{user.email}</p>
-                        </div>
-                        <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
-                          user.role === 'team'
-                            ? 'bg-blue-500/20 text-blue-400'
-                            : user.role === 'admin'
-                            ? 'bg-purple-500/20 text-purple-400'
-                            : 'bg-orange-500/20 text-orange-400'
-                        }`}>
-                          {user.role === 'team' ? <Shield size={9} /> : user.role === 'admin' ? <Shield size={9} /> : <Globe size={9} />}
-                          {user.role}
-                        </span>
-                        {isSelected && <Check size={12} className="text-vault-accent shrink-0" />}
-                      </button>
-                    )
-                  })}
-                </div>
+                <datalist id="grant-users-list">
+                  {users
+                    .filter((u) => !alreadyGrantedIds.has(u.id) && !selectedUsers.find((s) => s.id === u.id))
+                    .map((u) => <option key={u.id} value={`${u.username} — ${u.email}`} />)}
+                </datalist>
               )
             })()}
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface focus-within:border-vault-primary transition-colors">
+              <Search size={13} className="text-vault-muted shrink-0" />
+              <input
+                type="text"
+                list="grant-users-list"
+                className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
+                placeholder={loadingList ? 'Loading users…' : 'Search or pick a user…'}
+                value={userSearch}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setUserSearch(val)
+                  const matched = users.find((u) => val === `${u.username} — ${u.email}`)
+                  if (matched && !selectedUsers.find((s) => s.id === matched.id)) {
+                    toggleUser(matched)
+                    setUserSearch('')
+                  }
+                }}
+              />
+            </div>
           </div>
 
           {/* Selected user chips */}
@@ -359,65 +301,35 @@ export function ShareModal({ item, open, onClose }: Props) {
 
           <p className="text-xs text-vault-muted -mb-1">Recipients (optional) — select users or type an email</p>
 
-          {/* Share-link user picker */}
-          <div className="relative" ref={shareDropdownRef}>
-            <label
-              htmlFor="share-search"
-              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface cursor-text"
-            >
+          {/* Share-link user picker — native datalist combobox */}
+          <div>
+            <datalist id="share-users-list">
+              {users
+                .filter((u) => !selectedShareUsers.find((s) => s.id === u.id))
+                .map((u) => <option key={u.id} value={`${u.username} — ${u.email}`} />)}
+            </datalist>
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface focus-within:border-vault-primary transition-colors">
               <Search size={13} className="text-vault-muted shrink-0" />
               <input
-                id="share-search"
                 type="text"
-                autoComplete="off"
+                list="share-users-list"
                 className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
-                placeholder="Search users or type email…"
+                placeholder={loadingList ? 'Loading users…' : 'Pick a user or type an email…'}
                 value={shareSearch}
-                onChange={(e) => { setShareSearch(e.target.value); setRecipientEmail(e.target.value); openShareDropdown() }}
-                onClick={openShareDropdown}
-                onFocus={openShareDropdown}
-                onBlur={scheduleShareClose}
+                onChange={(e) => {
+                  const val = e.target.value
+                  setShareSearch(val)
+                  const matched = users.find((u) => val === `${u.username} — ${u.email}`)
+                  if (matched && !selectedShareUsers.find((s) => s.id === matched.id)) {
+                    toggleShareUser(matched)
+                    setShareSearch('')
+                    setRecipientEmail('')
+                  } else {
+                    setRecipientEmail(val)
+                  }
+                }}
               />
-            </label>
-
-            {shareDropdownOpen && (() => {
-              const filtered = users.filter((u) =>
-                u.username.toLowerCase().includes(shareSearch.toLowerCase()) ||
-                u.email.toLowerCase().includes(shareSearch.toLowerCase())
-              )
-              return (
-                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-[200] max-h-48 overflow-y-auto">
-                  {filtered.length === 0 ? (
-                    <p className="text-xs text-vault-muted text-center py-3">
-                      {loadingList ? 'Loading…' : shareSearch ? 'No users match — will use typed email' : 'No users available'}
-                    </p>
-                  ) : filtered.map((user) => {
-                    const isSelected = !!selectedShareUsers.find((u) => u.id === user.id)
-                    return (
-                      <button
-                        key={user.id}
-                        onMouseDown={(e) => { e.preventDefault(); toggleShareUser(user); setShareSearch(''); setRecipientEmail('') }}
-                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-vault-elevated text-left transition-colors"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-vault-text">{user.username}</p>
-                          <p className="text-[10px] text-vault-muted">{user.email}</p>
-                        </div>
-                        <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
-                          user.role === 'team' ? 'bg-blue-500/20 text-blue-400' :
-                          user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
-                          'bg-orange-500/20 text-orange-400'
-                        }`}>
-                          {user.role === 'external' ? <Globe size={9} /> : <Shield size={9} />}
-                          {user.role}
-                        </span>
-                        {isSelected && <Check size={12} className="text-vault-accent shrink-0" />}
-                      </button>
-                    )
-                  })}
-                </div>
-              )
-            })()}
+            </div>
           </div>
 
           {/* Selected chips */}
