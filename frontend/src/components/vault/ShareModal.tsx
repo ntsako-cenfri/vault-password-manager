@@ -1,13 +1,14 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Link2, Copy, Trash2, Plus, Calendar, Mail, UserPlus, UserCheck, Clock } from 'lucide-react'
+import { Link2, Copy, Trash2, Plus, Calendar, Mail, UserPlus, UserCheck, Clock, Search, X, Check, Shield, Globe } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { sharesApi } from '@/api/shares'
 import { grantsApi } from '@/api/grants'
+import { usersApi } from '@/api/users'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
 import { Input } from '@/components/ui/Input'
-import type { VaultItem, ShareLink, ItemGrant } from '@/types'
+import type { VaultItem, ShareLink, ItemGrant, User } from '@/types'
 
 interface Props {
   item: VaultItem
@@ -21,22 +22,41 @@ export function ShareModal({ item, open, onClose }: Props) {
   const [loadingList, setLoadingList] = useState(false)
   const [creating, setCreating] = useState(false)
   const [recipientEmail, setRecipientEmail] = useState('')
-  const [grantEmail, setGrantEmail] = useState('')
   const [granting, setGranting] = useState(false)
+
+  // User picker state
+  const [users, setUsers] = useState<User[]>([])
+  const [selectedUsers, setSelectedUsers] = useState<User[]>([])
+  const [userSearch, setUserSearch] = useState('')
+  const [dropdownOpen, setDropdownOpen] = useState(false)
+  const dropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (!open) return
     setLoadingList(true)
-    Promise.all([
+    Promise.allSettled([
       sharesApi.list(item.id),
       grantsApi.listGrants(item.id),
+      usersApi.list(),
     ])
-      .then(([s, g]) => {
-        setShares(s.data)
-        setGrants(g.data)
+      .then(([s, g, u]) => {
+        if (s.status === 'fulfilled') setShares(s.value.data)
+        if (g.status === 'fulfilled') setGrants(g.value.data)
+        if (u.status === 'fulfilled') setUsers(u.value.data)
       })
       .finally(() => setLoadingList(false))
   }, [open, item.id])
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
 
   const createShare = async () => {
     setCreating(true)
@@ -67,18 +87,41 @@ export function ShareModal({ item, open, onClose }: Props) {
     }
   }
 
-  const grantAccess = async () => {
-    if (!grantEmail.trim()) return
+  const toggleUser = (user: User) => {
+    setSelectedUsers((prev) =>
+      prev.find((u) => u.id === user.id)
+        ? prev.filter((u) => u.id !== user.id)
+        : [...prev, user]
+    )
+  }
+
+  const grantAccessToSelected = async () => {
+    if (selectedUsers.length === 0) return
     setGranting(true)
     try {
-      const { data } = await grantsApi.grantAccess(item.id, grantEmail.trim())
+      const results = await Promise.allSettled(
+        selectedUsers.map((u) => grantsApi.grantAccess(item.id, u.email))
+      )
+      const succeeded: ItemGrant[] = []
+      let failCount = 0
+      for (const r of results) {
+        if (r.status === 'fulfilled') succeeded.push(r.value.data)
+        else failCount++
+      }
       setGrants((prev) => {
-        const exists = prev.find((g) => g.id === data.id)
-        // Always update with fresh server data so resolved grants stop showing "Pending"
-        return exists ? prev.map((g) => g.id === data.id ? data : g) : [data, ...prev]
+        let updated = [...prev]
+        for (const data of succeeded) {
+          const exists = updated.find((g) => g.id === data.id)
+          updated = exists
+            ? updated.map((g) => (g.id === data.id ? data : g))
+            : [data, ...updated]
+        }
+        return updated
       })
-      setGrantEmail('')
-      toast.success('Access granted')
+      setSelectedUsers([])
+      setUserSearch('')
+      if (succeeded.length) toast.success(`Access granted to ${succeeded.length} user${succeeded.length > 1 ? 's' : ''}`)
+      if (failCount) toast.error(`Failed to grant ${failCount} user${failCount > 1 ? 's' : ''}`)
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Failed to grant access')
     } finally {
@@ -113,24 +156,99 @@ export function ShareModal({ item, open, onClose }: Props) {
             <UserPlus size={12} /> Direct Access (Permanent)
           </p>
           <p className="text-xs text-vault-muted">
-            Grant a user permanent read access by email. Works even before they register.
+            Select one or more users to grant permanent read access.
           </p>
 
-          <div className="flex gap-2">
-            <div className="flex-1">
-              <Input
-                label=""
-                type="email"
-                placeholder="user@company.com"
-                value={grantEmail}
-                onChange={(e) => setGrantEmail(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && grantAccess()}
+          {/* User picker */}
+          <div className="relative" ref={dropdownRef}>
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface cursor-text"
+              onClick={() => setDropdownOpen(true)}
+            >
+              <Search size={13} className="text-vault-muted shrink-0" />
+              <input
+                type="text"
+                className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
+                placeholder="Search users…"
+                value={userSearch}
+                onChange={(e) => { setUserSearch(e.target.value); setDropdownOpen(true) }}
+                onFocus={() => setDropdownOpen(true)}
               />
             </div>
-            <Button onClick={grantAccess} loading={granting} size="sm" className="shrink-0 self-end mb-0.5">
-              Grant
-            </Button>
+
+            {/* Dropdown list */}
+            {dropdownOpen && (() => {
+              const alreadyGrantedIds = new Set(grants.map((g) => g.granted_to_id).filter(Boolean))
+              const filtered = users.filter((u) =>
+                !alreadyGrantedIds.has(u.id) &&
+                (u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
+                  u.email.toLowerCase().includes(userSearch.toLowerCase()))
+              )
+              return filtered.length > 0 ? (
+                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-50 max-h-52 overflow-y-auto">
+                  {filtered.map((user) => {
+                    const isSelected = !!selectedUsers.find((u) => u.id === user.id)
+                    return (
+                      <button
+                        key={user.id}
+                        onClick={() => toggleUser(user)}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-vault-elevated text-left transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-vault-text">{user.username}</p>
+                          <p className="text-[10px] text-vault-muted">{user.email}</p>
+                        </div>
+                        <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
+                          user.role === 'team'
+                            ? 'bg-blue-500/20 text-blue-400'
+                            : user.role === 'admin'
+                            ? 'bg-purple-500/20 text-purple-400'
+                            : 'bg-orange-500/20 text-orange-400'
+                        }`}>
+                          {user.role === 'team' ? <Shield size={9} /> : user.role === 'admin' ? <Shield size={9} /> : <Globe size={9} />}
+                          {user.role}
+                        </span>
+                        {isSelected && <Check size={12} className="text-vault-accent shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              ) : null
+            })()}
           </div>
+
+          {/* Selected user chips */}
+          {selectedUsers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedUsers.map((user) => (
+                <span
+                  key={user.id}
+                  className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-vault-border bg-vault-surface text-[11px] font-medium text-vault-text"
+                >
+                  {user.username}
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                    user.role === 'team' ? 'bg-blue-500/20 text-blue-400' :
+                    user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                    'bg-orange-500/20 text-orange-400'
+                  }`}>
+                    {user.role}
+                  </span>
+                  <button
+                    onClick={() => toggleUser(user)}
+                    className="text-vault-muted hover:text-vault-text transition-colors ml-0.5"
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+
+          {selectedUsers.length > 0 && (
+            <Button onClick={grantAccessToSelected} loading={granting} size="sm" className="self-end">
+              Grant to {selectedUsers.length} user{selectedUsers.length > 1 ? 's' : ''}
+            </Button>
+          )}
 
           {/* Existing grants */}
           {grants.length > 0 && (
