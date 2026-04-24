@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { Link2, Copy, Trash2, Plus, Calendar, Mail, UserPlus, UserCheck, Clock, Search, X, Check, Shield, Globe } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -30,6 +30,16 @@ export function ShareModal({ item, open, onClose }: Props) {
   const [userSearch, setUserSearch] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const openDropdown = useCallback(() => {
+    if (closeTimer.current) clearTimeout(closeTimer.current)
+    setDropdownOpen(true)
+  }, [])
+
+  const scheduleClose = useCallback(() => {
+    closeTimer.current = setTimeout(() => setDropdownOpen(false), 150)
+  }, [])
 
   useEffect(() => {
     if (!open) return
@@ -46,17 +56,6 @@ export function ShareModal({ item, open, onClose }: Props) {
       })
       .finally(() => setLoadingList(false))
   }, [open, item.id])
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
-        setDropdownOpen(false)
-      }
-    }
-    document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
-  }, [])
 
   const createShare = async () => {
     setCreating(true)
@@ -163,7 +162,7 @@ export function ShareModal({ item, open, onClose }: Props) {
           <div className="relative" ref={dropdownRef}>
             <div
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface cursor-text"
-              onClick={() => setDropdownOpen(true)}
+              onMouseDown={(e) => { e.preventDefault(); openDropdown() }}
             >
               <Search size={13} className="text-vault-muted shrink-0" />
               <input
@@ -171,8 +170,9 @@ export function ShareModal({ item, open, onClose }: Props) {
                 className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
                 placeholder="Search users…"
                 value={userSearch}
-                onChange={(e) => { setUserSearch(e.target.value); setDropdownOpen(true) }}
-                onFocus={() => setDropdownOpen(true)}
+                onChange={(e) => { setUserSearch(e.target.value); openDropdown() }}
+                onFocus={openDropdown}
+                onBlur={scheduleClose}
               />
             </div>
 
@@ -195,7 +195,7 @@ export function ShareModal({ item, open, onClose }: Props) {
                     return (
                       <button
                         key={user.id}
-                        onClick={() => toggleUser(user)}
+                        onMouseDown={(e) => { e.preventDefault(); toggleUser(user) }}
                         className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-vault-elevated text-left transition-colors"
                       >
                         <div className="flex-1 min-w-0">
