@@ -204,12 +204,13 @@ export function ShareModal({ item, open, onClose }: Props) {
 
           {/* User picker */}
           <div className="relative" ref={dropdownRef}>
-            <div
+            <label
+              htmlFor="grant-search"
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface cursor-text"
-              onMouseDown={(e) => { e.preventDefault(); openDropdown() }}
             >
               <Search size={13} className="text-vault-muted shrink-0" />
               <input
+                id="grant-search"
                 type="text"
                 autoComplete="off"
                 className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
@@ -219,7 +220,7 @@ export function ShareModal({ item, open, onClose }: Props) {
                 onFocus={openDropdown}
                 onBlur={scheduleClose}
               />
-            </div>
+            </label>
 
             {/* Dropdown list */}
             {dropdownOpen && (() => {
@@ -345,12 +346,13 @@ export function ShareModal({ item, open, onClose }: Props) {
 
           {/* Share-link user picker */}
           <div className="relative" ref={shareDropdownRef}>
-            <div
+            <label
+              htmlFor="share-search"
               className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface cursor-text"
-              onMouseDown={(e) => { e.preventDefault(); openShareDropdown() }}
             >
               <Search size={13} className="text-vault-muted shrink-0" />
               <input
+                id="share-search"
                 type="text"
                 autoComplete="off"
                 className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
@@ -360,7 +362,7 @@ export function ShareModal({ item, open, onClose }: Props) {
                 onFocus={openShareDropdown}
                 onBlur={scheduleShareClose}
               />
-            </div>
+            </label>
 
             {shareDropdownOpen && (() => {
               const filtered = users.filter((u) =>
