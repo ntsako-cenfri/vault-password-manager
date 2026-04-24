@@ -7,7 +7,6 @@ import { grantsApi } from '@/api/grants'
 import { usersApi } from '@/api/users'
 import { Modal } from '@/components/ui/Modal'
 import { Button } from '@/components/ui/Button'
-import { Input } from '@/components/ui/Input'
 import type { VaultItem, ShareLink, ItemGrant, User } from '@/types'
 
 interface Props {
@@ -24,13 +23,37 @@ export function ShareModal({ item, open, onClose }: Props) {
   const [recipientEmail, setRecipientEmail] = useState('')
   const [granting, setGranting] = useState(false)
 
-  // User picker state
+  // User picker state — Direct Access section
   const [users, setUsers] = useState<User[]>([])
   const [selectedUsers, setSelectedUsers] = useState<User[]>([])
   const [userSearch, setUserSearch] = useState('')
   const [dropdownOpen, setDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
   const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // User picker state — Share Link section
+  const [selectedShareUsers, setSelectedShareUsers] = useState<User[]>([])
+  const [shareSearch, setShareSearch] = useState('')
+  const [shareDropdownOpen, setShareDropdownOpen] = useState(false)
+  const shareDropdownRef = useRef<HTMLDivElement>(null)
+  const shareCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const openShareDropdown = useCallback(() => {
+    if (shareCloseTimer.current) clearTimeout(shareCloseTimer.current)
+    setShareDropdownOpen(true)
+  }, [])
+
+  const scheduleShareClose = useCallback(() => {
+    shareCloseTimer.current = setTimeout(() => setShareDropdownOpen(false), 150)
+  }, [])
+
+  const toggleShareUser = (user: User) => {
+    setSelectedShareUsers((prev) =>
+      prev.find((u) => u.id === user.id)
+        ? prev.filter((u) => u.id !== user.id)
+        : [...prev, user]
+    )
+  }
 
   const openDropdown = useCallback(() => {
     if (closeTimer.current) clearTimeout(closeTimer.current)
@@ -42,7 +65,12 @@ export function ShareModal({ item, open, onClose }: Props) {
   }, [])
 
   useEffect(() => {
-    if (!open) return
+    if (!open) {
+      setSelectedShareUsers([])
+      setShareSearch('')
+      setShareDropdownOpen(false)
+      return
+    }
     setLoadingList(true)
     Promise.allSettled([
       sharesApi.list(item.id),
@@ -61,14 +89,30 @@ export function ShareModal({ item, open, onClose }: Props) {
     setCreating(true)
     try {
       const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
-      const { data } = await sharesApi.create(item.id, {
-        recipient_email: recipientEmail || undefined,
-        is_strict: true,
-        expires_at: expires,
-      })
-      setShares((prev) => [data, ...prev])
+      // Build list of recipients: selected users + any manually typed email
+      const recipients: (string | undefined)[] = [
+        ...selectedShareUsers.map((u) => u.email),
+        ...(recipientEmail.trim() ? [recipientEmail.trim()] : []),
+      ]
+      // If nothing selected/typed, create one open link
+      const targets = recipients.length > 0 ? recipients : [undefined]
+      const results = await Promise.allSettled(
+        targets.map((email) =>
+          sharesApi.create(item.id, {
+            recipient_email: email,
+            is_strict: true,
+            expires_at: expires,
+          })
+        )
+      )
+      const created = results.filter((r) => r.status === 'fulfilled').map((r) => (r as PromiseFulfilledResult<any>).value.data)
+      const failCount = results.filter((r) => r.status === 'rejected').length
+      setShares((prev) => [...created, ...prev])
       setRecipientEmail('')
-      toast.success('Share link created')
+      setSelectedShareUsers([])
+      setShareSearch('')
+      if (created.length) toast.success(`${created.length} share link${created.length > 1 ? 's' : ''} created`)
+      if (failCount) toast.error(`Failed to create ${failCount} link${failCount > 1 ? 's' : ''}`)
     } catch {
       toast.error('Failed to create share link')
     } finally {
@@ -167,6 +211,7 @@ export function ShareModal({ item, open, onClose }: Props) {
               <Search size={13} className="text-vault-muted shrink-0" />
               <input
                 type="text"
+                autoComplete="off"
                 className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
                 placeholder="Search users…"
                 value={userSearch}
@@ -296,20 +341,101 @@ export function ShareModal({ item, open, onClose }: Props) {
             <Link2 size={12} /> Share Link (24 h)
           </p>
 
-          <Input
-            label="Recipient Email (optional)"
-            type="email"
-            placeholder="teammate@company.com"
-            value={recipientEmail}
-            onChange={(e) => setRecipientEmail(e.target.value)}
-          />
+          <p className="text-xs text-vault-muted -mb-1">Recipients (optional) — select users or type an email</p>
+
+          {/* Share-link user picker */}
+          <div className="relative" ref={shareDropdownRef}>
+            <div
+              className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface cursor-text"
+              onMouseDown={(e) => { e.preventDefault(); openShareDropdown() }}
+            >
+              <Search size={13} className="text-vault-muted shrink-0" />
+              <input
+                type="text"
+                autoComplete="off"
+                className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
+                placeholder="Search users or type email…"
+                value={shareSearch}
+                onChange={(e) => { setShareSearch(e.target.value); setRecipientEmail(e.target.value); openShareDropdown() }}
+                onFocus={openShareDropdown}
+                onBlur={scheduleShareClose}
+              />
+            </div>
+
+            {shareDropdownOpen && (() => {
+              const filtered = users.filter((u) =>
+                u.username.toLowerCase().includes(shareSearch.toLowerCase()) ||
+                u.email.toLowerCase().includes(shareSearch.toLowerCase())
+              )
+              return (
+                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-50 max-h-48 overflow-y-auto">
+                  {filtered.length === 0 ? (
+                    <p className="text-xs text-vault-muted text-center py-3">
+                      {loadingList ? 'Loading…' : shareSearch ? 'No users match — will use typed email' : 'No users available'}
+                    </p>
+                  ) : filtered.map((user) => {
+                    const isSelected = !!selectedShareUsers.find((u) => u.id === user.id)
+                    return (
+                      <button
+                        key={user.id}
+                        onMouseDown={(e) => { e.preventDefault(); toggleShareUser(user); setShareSearch(''); setRecipientEmail('') }}
+                        className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-vault-elevated text-left transition-colors"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-vault-text">{user.username}</p>
+                          <p className="text-[10px] text-vault-muted">{user.email}</p>
+                        </div>
+                        <span className={`flex items-center gap-1 text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
+                          user.role === 'team' ? 'bg-blue-500/20 text-blue-400' :
+                          user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                          'bg-orange-500/20 text-orange-400'
+                        }`}>
+                          {user.role === 'external' ? <Globe size={9} /> : <Shield size={9} />}
+                          {user.role}
+                        </span>
+                        {isSelected && <Check size={12} className="text-vault-accent shrink-0" />}
+                      </button>
+                    )
+                  })}
+                </div>
+              )
+            })()}
+          </div>
+
+          {/* Selected chips */}
+          {selectedShareUsers.length > 0 && (
+            <div className="flex flex-wrap gap-1.5">
+              {selectedShareUsers.map((user) => (
+                <span
+                  key={user.id}
+                  className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-vault-border bg-vault-surface text-[11px] font-medium text-vault-text"
+                >
+                  {user.username}
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                    user.role === 'team' ? 'bg-blue-500/20 text-blue-400' :
+                    user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                    'bg-orange-500/20 text-orange-400'
+                  }`}>{user.role}</span>
+                  <button
+                    onClick={() => toggleShareUser(user)}
+                    className="text-vault-muted hover:text-vault-text transition-colors ml-0.5"
+                  >
+                    <X size={10} />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
 
           <p className="text-xs text-vault-muted">
             Link expires in <span className="text-vault-primary font-medium">24 hours</span> · Requires login to view
           </p>
 
           <Button onClick={createShare} loading={creating} size="sm">
-            <Plus size={14} /> Generate Link
+            <Plus size={14} />
+            {selectedShareUsers.length > 1
+              ? `Generate ${selectedShareUsers.length} Links`
+              : 'Generate Link'}
           </Button>
         </div>
 
