@@ -184,9 +184,13 @@ export function ShareModal({ item, open, onClose }: Props) {
                 (u.username.toLowerCase().includes(userSearch.toLowerCase()) ||
                   u.email.toLowerCase().includes(userSearch.toLowerCase()))
               )
-              return filtered.length > 0 ? (
+              return (
                 <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-50 max-h-52 overflow-y-auto">
-                  {filtered.map((user) => {
+                  {filtered.length === 0 ? (
+                    <p className="text-xs text-vault-muted text-center py-4">
+                      {loadingList ? 'Loading…' : userSearch ? 'No users match' : 'No users to share with'}
+                    </p>
+                  ) : filtered.map((user) => {
                     const isSelected = !!selectedUsers.find((u) => u.id === user.id)
                     return (
                       <button
@@ -213,7 +217,7 @@ export function ShareModal({ item, open, onClose }: Props) {
                     )
                   })}
                 </div>
-              ) : null
+              )
             })()}
           </div>
 
