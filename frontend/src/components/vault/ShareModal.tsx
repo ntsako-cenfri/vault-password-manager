@@ -22,6 +22,8 @@ export function ShareModal({ item, open, onClose }: Props) {
   const [creating, setCreating] = useState(false)
   const [recipientEmail, setRecipientEmail] = useState('')
   const [granting, setGranting] = useState(false)
+  const [confirmRevokeGrant, setConfirmRevokeGrant] = useState<string | null>(null)
+  const [confirmRevokeLink, setConfirmRevokeLink] = useState<string | null>(null)
 
   // User picker state — Direct Access section
   const [users, setUsers] = useState<User[]>([])
@@ -217,6 +219,7 @@ export function ShareModal({ item, open, onClose }: Props) {
                 placeholder="Search users…"
                 value={userSearch}
                 onChange={(e) => { setUserSearch(e.target.value); openDropdown() }}
+                onClick={openDropdown}
                 onFocus={openDropdown}
                 onBlur={scheduleClose}
               />
@@ -231,7 +234,7 @@ export function ShareModal({ item, open, onClose }: Props) {
                   u.email.toLowerCase().includes(userSearch.toLowerCase()))
               )
               return (
-                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-50 max-h-52 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-[200] max-h-52 overflow-y-auto">
                   {filtered.length === 0 ? (
                     <p className="text-xs text-vault-muted text-center py-4">
                       {loadingList ? 'Loading…' : userSearch ? 'No users match' : 'No users to share with'}
@@ -324,9 +327,21 @@ export function ShareModal({ item, open, onClose }: Props) {
                       {' · '}{grant.granted_to_email}
                     </p>
                   </div>
-                  <Button variant="danger" size="sm" onClick={() => revokeGrant(grant.id)} title="Revoke">
-                    <Trash2 size={12} />
-                  </Button>
+                  {confirmRevokeGrant === grant.id ? (
+                    <div className="flex items-center gap-1">
+                      <span className="text-[10px] text-vault-muted">Revoke?</span>
+                      <Button variant="ghost" size="sm" onClick={() => setConfirmRevokeGrant(null)} title="Cancel">
+                        <X size={11} />
+                      </Button>
+                      <Button variant="danger" size="sm" onClick={() => { revokeGrant(grant.id); setConfirmRevokeGrant(null) }} title="Confirm">
+                        <Check size={11} />
+                      </Button>
+                    </div>
+                  ) : (
+                    <Button variant="danger" size="sm" onClick={() => setConfirmRevokeGrant(grant.id)} title="Revoke">
+                      <Trash2 size={12} />
+                    </Button>
+                  )}
                 </motion.div>
               ))}
             </div>
@@ -359,6 +374,7 @@ export function ShareModal({ item, open, onClose }: Props) {
                 placeholder="Search users or type email…"
                 value={shareSearch}
                 onChange={(e) => { setShareSearch(e.target.value); setRecipientEmail(e.target.value); openShareDropdown() }}
+                onClick={openShareDropdown}
                 onFocus={openShareDropdown}
                 onBlur={scheduleShareClose}
               />
@@ -370,7 +386,7 @@ export function ShareModal({ item, open, onClose }: Props) {
                 u.email.toLowerCase().includes(shareSearch.toLowerCase())
               )
               return (
-                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-50 max-h-48 overflow-y-auto">
+                <div className="absolute top-full left-0 right-0 mt-1 rounded-lg border border-vault-border bg-vault-surface shadow-xl z-[200] max-h-48 overflow-y-auto">
                   {filtered.length === 0 ? (
                     <p className="text-xs text-vault-muted text-center py-3">
                       {loadingList ? 'Loading…' : shareSearch ? 'No users match — will use typed email' : 'No users available'}
@@ -477,9 +493,21 @@ export function ShareModal({ item, open, onClose }: Props) {
                 <Button variant="ghost" size="sm" onClick={() => copyLink(share.token)} title="Copy link">
                   <Copy size={13} />
                 </Button>
-                <Button variant="danger" size="sm" onClick={() => revokeLink(share.token)} title="Revoke">
-                  <Trash2 size={13} />
-                </Button>
+                {confirmRevokeLink === share.token ? (
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] text-vault-muted">Delete?</span>
+                    <Button variant="ghost" size="sm" onClick={() => setConfirmRevokeLink(null)} title="Cancel">
+                      <X size={11} />
+                    </Button>
+                    <Button variant="danger" size="sm" onClick={() => { revokeLink(share.token); setConfirmRevokeLink(null) }} title="Confirm">
+                      <Check size={11} />
+                    </Button>
+                  </div>
+                ) : (
+                  <Button variant="danger" size="sm" onClick={() => setConfirmRevokeLink(share.token)} title="Delete">
+                    <Trash2 size={13} />
+                  </Button>
+                )}
               </div>
             </motion.div>
           ))}
