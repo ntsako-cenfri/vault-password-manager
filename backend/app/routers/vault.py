@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, Form, Response, UploadFile
+from fastapi import APIRouter, Depends, Form, Request, Response, UploadFile
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -6,6 +6,7 @@ from app.database import get_db
 from app.models.user import User
 from app.schemas.grant import GrantedItemOut
 from app.schemas.vault import CredentialFieldIn, VaultItemCreate, VaultItemOut, VaultItemUpdate
+from app.services.audit_service import AuditService
 from app.services.encryption_service import EncryptionService
 from app.services.vault_service import VaultService
 from app.utils.dependencies import get_current_user
@@ -17,6 +18,11 @@ _enc = EncryptionService(settings.master_encryption_key)
 
 def _svc(db: AsyncSession) -> VaultService:
     return VaultService(db, _enc)
+
+
+def _safe_filename(name: str) -> str:
+    """Strip characters that could break Content-Disposition headers."""
+    return "".join(c for c in name if c not in '"\\\r\n').strip() or "download"
 
 
 @router.get("", response_model=list[VaultItemOut])
@@ -62,11 +68,20 @@ async def create_item(
 @router.get("/{item_id}", response_model=VaultItemOut)
 async def get_item(
     item_id: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     svc = _svc(db)
     item = await svc.get_item(item_id, current_user)
+    await AuditService(db).log(
+        "vault.read",
+        actor_id=str(current_user.id),
+        actor_email=current_user.email,
+        resource_type="vault_item",
+        resource_id=item_id,
+        ip_address=request.client.host if request.client else None,
+    )
     return _build_item_out(item, svc)
 
 
@@ -85,11 +100,20 @@ async def update_item(
 @router.delete("/{item_id}", status_code=204)
 async def delete_item(
     item_id: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     svc = _svc(db)
     await svc.delete_item(item_id, current_user)
+    await AuditService(db).log(
+        "vault.delete",
+        actor_id=str(current_user.id),
+        actor_email=current_user.email,
+        resource_type="vault_item",
+        resource_id=item_id,
+        ip_address=request.client.host if request.client else None,
+    )
 
 
 # ── Fields ────────────────────────────────────────────────────────────────────
@@ -125,15 +149,26 @@ async def upload_field(
 async def download_field(
     item_id: str,
     field_id: str,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     svc = _svc(db)
     content, filename = await svc.read_file_field(item_id, field_id, current_user)
+    await AuditService(db).log(
+        "vault.file_download",
+        actor_id=str(current_user.id),
+        actor_email=current_user.email,
+        resource_type="credential_field",
+        resource_id=field_id,
+        detail=f"item={item_id}",
+        ip_address=request.client.host if request.client else None,
+    )
+    safe = _safe_filename(filename)
     return Response(
         content=content,
         media_type="application/octet-stream",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{safe}"},
     )
 
 

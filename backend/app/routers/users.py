@@ -1,8 +1,10 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.database import get_db
+from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.grant import GrantedItemOut, UserVaultResponse
@@ -92,3 +94,36 @@ async def get_user_vault(
         ],
     )
 
+
+@router.get("/audit-log")
+async def get_audit_log(
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+    limit: int = Query(100, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+    event: str | None = Query(None),
+    actor_id: str | None = Query(None),
+):
+    """Admin only: paginated audit log."""
+    q = select(AuditLog).order_by(desc(AuditLog.timestamp))
+    if event:
+        q = q.where(AuditLog.event == event)
+    if actor_id:
+        q = q.where(AuditLog.actor_id == actor_id)
+    q = q.limit(limit).offset(offset)
+    result = await db.execute(q)
+    rows = result.scalars().all()
+    return [
+        {
+            "id": r.id,
+            "timestamp": r.timestamp,
+            "event": r.event,
+            "actor_id": r.actor_id,
+            "actor_email": r.actor_email,
+            "resource_type": r.resource_type,
+            "resource_id": r.resource_id,
+            "detail": r.detail,
+            "ip_address": r.ip_address,
+        }
+        for r in rows
+    ]

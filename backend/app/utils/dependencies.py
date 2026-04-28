@@ -2,9 +2,11 @@
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from jose import JWTError
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.models.revoked_token import RevokedToken
 from app.models.user import User, UserRole
 from app.repositories.user_repository import UserRepository
 from app.utils.security import decode_token
@@ -24,6 +26,13 @@ async def get_current_user(
 
     if payload.get("type") != "access":
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token type")
+
+    # Check revocation list
+    jti = payload.get("jti")
+    if jti:
+        result = await db.execute(select(RevokedToken).where(RevokedToken.jti == jti))
+        if result.scalar_one_or_none() is not None:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Token has been revoked")
 
     user = await UserRepository(db).get_by_id(payload["sub"])
     if not user or not user.is_active:

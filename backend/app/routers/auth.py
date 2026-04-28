@@ -1,7 +1,8 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
+from app.main import limiter
 from app.models.user import User
 from app.repositories.grant_repository import GrantRepository
 from app.schemas.auth import (
@@ -47,15 +48,30 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/login", response_model=TokenResponse)
-async def login(body: LoginRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("10/minute")
+async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     svc = AuthService(db)
-    return await svc.login(body)
+    ip = request.client.host if request.client else None
+    return await svc.login(body, ip=ip)
 
 
 @router.post("/refresh", response_model=TokenResponse)
-async def refresh(body: RefreshRequest, db: AsyncSession = Depends(get_db)):
+@limiter.limit("20/minute")
+async def refresh(request: Request, body: RefreshRequest, db: AsyncSession = Depends(get_db)):
     svc = AuthService(db)
     return await svc.refresh(body.refresh_token)
+
+
+@router.post("/logout", status_code=204)
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    from app.services.auth_service import AuthService as _AS
+    raw = request.headers.get("authorization", "").removeprefix("Bearer ").strip() or None
+    svc = _AS(db)
+    await svc.logout(current_user, token=raw)
 
 
 @router.post("/reset-password", status_code=204)

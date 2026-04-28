@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
@@ -7,6 +7,7 @@ from app.models.user import User
 from app.schemas.grant import GrantAccessRequest, GrantedItemOut, ItemGrantOut
 from app.schemas.share import ShareLinkCreate, ShareLinkOut, SharedItemResponse
 from app.schemas.vault import CredentialFieldOut, VaultItemOut
+from app.services.audit_service import AuditService
 from app.services.encryption_service import EncryptionService
 from app.services.grant_service import GrantService
 from app.services.share_service import ShareService

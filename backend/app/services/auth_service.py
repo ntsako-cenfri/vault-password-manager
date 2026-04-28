@@ -1,11 +1,15 @@
 """Auth business logic — kept deliberately lean; no DB access here."""
+from datetime import datetime, timezone
+
 from fastapi import HTTPException, status
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.revoked_token import RevokedToken
 from app.models.user import User, UserRole
 from app.repositories.user_repository import UserRepository
 from app.schemas.auth import LoginRequest, RegisterRequest, SetupRequest
+from app.services.audit_service import AuditService
 from app.utils.security import (
     create_access_token,
     create_refresh_token,
@@ -17,7 +21,9 @@ from app.utils.security import (
 
 class AuthService:
     def __init__(self, db: AsyncSession) -> None:
+        self._db = db
         self._repo = UserRepository(db)
+        self._audit = AuditService(db)
 
     # ── Setup ─────────────────────────────────────────────────────────────────
 
@@ -42,25 +48,62 @@ class AuthService:
 
     async def register(self, data: RegisterRequest) -> User:
         await self._assert_unique(data.email, data.username)
-        return await self._repo.create(
+        user = await self._repo.create(
             email=data.email,
             username=data.username,
             hashed_password=hash_password(data.password),
             role=UserRole.external,  # admin promotes later
         )
+        await self._audit.log("user.register", actor_id=str(user.id), actor_email=user.email)
+        return user
 
     # ── Login ─────────────────────────────────────────────────────────────────
 
-    async def login(self, data: LoginRequest) -> dict:
+    async def login(self, data: LoginRequest, ip: str | None = None) -> dict:
         user = await self._repo.get_by_email(data.email)
         if not user or not verify_password(data.password, user.hashed_password):
+            await self._audit.log(
+                "auth.login_failed",
+                actor_email=data.email,
+                detail="Invalid credentials",
+                ip_address=ip,
+            )
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
             )
         if not user.is_active:
+            await self._audit.log(
+                "auth.login_failed",
+                actor_id=str(user.id),
+                actor_email=user.email,
+                detail="Account disabled",
+                ip_address=ip,
+            )
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
+        await self._audit.log(
+            "auth.login_success",
+            actor_id=str(user.id),
+            actor_email=user.email,
+            ip_address=ip,
+        )
         return self._issue_tokens(user)
+
+    # ── Logout — revoke the current access token ──────────────────────────────
+
+    async def logout(self, user: User, token: str | None = None) -> None:
+        if token:
+            try:
+                payload = decode_token(token)
+                jti = payload.get("jti")
+                exp = payload.get("exp")
+                if jti and exp:
+                    expires_at = datetime.fromtimestamp(exp, tz=timezone.utc)
+                    self._db.add(RevokedToken(jti=jti, expires_at=expires_at))
+                    await self._db.flush()
+            except JWTError:
+                pass  # already invalid — nothing to revoke
+        await self._audit.log("auth.logout", actor_id=str(user.id), actor_email=user.email)
 
     # ── Token refresh ─────────────────────────────────────────────────────────
 
@@ -90,6 +133,9 @@ class AuthService:
             )
         user.hashed_password = hash_password(new_password)
         await self._repo.save(user)
+        await self._audit.log(
+            "auth.password_reset", actor_id=str(user.id), actor_email=user.email
+        )
 
     # ── Helpers ───────────────────────────────────────────────────────────────
 
