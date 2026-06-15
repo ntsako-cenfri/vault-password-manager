@@ -23,6 +23,7 @@ class RegisterRequest(BaseModel):
     email: EmailStr
     username: str
     password: str
+    invite_token: str | None = None
 
     @field_validator("password")
     @classmethod
@@ -42,13 +43,33 @@ class LoginRequest(BaseModel):
 
 
 class TokenResponse(BaseModel):
-    access_token: str
-    refresh_token: str
+    access_token: str = ""
+    refresh_token: str = ""
     token_type: str = "bearer"
+    mfa_required: bool = False
+    mfa_token: str | None = None
 
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class TotpSetupResponse(BaseModel):
+    secret: str
+    otpauth_uri: str
+
+
+class TotpEnableRequest(BaseModel):
+    code: str
+
+
+class TotpDisableRequest(BaseModel):
+    code: str
+
+
+class TotpVerifyLoginRequest(BaseModel):
+    mfa_token: str
+    code: str
 
 
 class PasswordResetRequest(BaseModel):

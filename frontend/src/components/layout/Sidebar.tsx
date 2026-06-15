@@ -1,9 +1,11 @@
+import { useState } from 'react'
 import { NavLink, useNavigate } from 'react-router-dom'
 import {
-  ShieldCheck, LayoutGrid, Users, LogOut, Settings, ChevronRight, X
+  ShieldCheck, LayoutGrid, Users, LogOut, Settings, ChevronRight, X, UserPlus
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useAuthStore } from '@/store/authStore'
+import { InviteModal } from '@/components/ui/InviteModal'
 
 interface Props {
   open?: boolean
@@ -13,6 +15,7 @@ interface Props {
 export function Sidebar({ open = false, onClose }: Props) {
   const { user, logout } = useAuthStore()
   const navigate = useNavigate()
+  const [inviteOpen, setInviteOpen] = useState(false)
 
   const handleLogout = () => { logout(); navigate('/login') }
 
@@ -82,6 +85,18 @@ export function Sidebar({ open = false, onClose }: Props) {
               <ChevronRight size={12} className="ml-auto opacity-0 group-hover:opacity-40 transition-opacity" />
             </NavLink>
           ))}
+
+          {/* Invite — admin & team only */}
+          {user?.role !== 'external' && (
+            <button
+              onClick={() => { setInviteOpen(true); onClose?.() }}
+              className="flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors group text-vault-muted hover:bg-vault-elevated hover:text-vault-text w-full text-left"
+            >
+              <UserPlus size={16} />
+              Invite People
+              <ChevronRight size={12} className="ml-auto opacity-0 group-hover:opacity-40 transition-opacity" />
+            </button>
+          )}
         </nav>
 
         {/* User footer */}
@@ -110,6 +125,8 @@ export function Sidebar({ open = false, onClose }: Props) {
           </div>
         </div>
       </aside>
+
+      <InviteModal open={inviteOpen} onClose={() => setInviteOpen(false)} />
     </>
   )
 }

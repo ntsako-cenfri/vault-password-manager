@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
-import { Link2, Copy, Trash2, Plus, Calendar, Mail, UserPlus, UserCheck, Clock, Search, X, Check } from 'lucide-react'
+import { Link2, Copy, Trash2, Plus, Calendar, Mail, UserPlus, UserCheck, Clock, X, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { sharesApi } from '@/api/shares'
 import { grantsApi } from '@/api/grants'
@@ -28,11 +28,9 @@ export function ShareModal({ item, open, onClose }: Props) {
   // User picker state — Direct Access section
   const [users, setUsers] = useState<User[]>([])
   const [selectedUsers, setSelectedUsers] = useState<User[]>([])
-  const [userSearch, setUserSearch] = useState('')
 
   // User picker state — Share Link section
   const [selectedShareUsers, setSelectedShareUsers] = useState<User[]>([])
-  const [shareSearch, setShareSearch] = useState('')
 
   const toggleShareUser = (user: User) => {
     setSelectedShareUsers((prev) =>
@@ -44,8 +42,11 @@ export function ShareModal({ item, open, onClose }: Props) {
 
   useEffect(() => {
     if (!open) {
+      setShares([])
+      setGrants([])
+      setUsers([])
       setSelectedShareUsers([])
-      setShareSearch('')
+      setSelectedUsers([])
       return
     }
     setLoadingList(true)
@@ -87,7 +88,6 @@ export function ShareModal({ item, open, onClose }: Props) {
       setShares((prev) => [...created, ...prev])
       setRecipientEmail('')
       setSelectedShareUsers([])
-      setShareSearch('')
       if (created.length) toast.success(`${created.length} share link${created.length > 1 ? 's' : ''} created`)
       if (failCount) toast.error(`Failed to create ${failCount} link${failCount > 1 ? 's' : ''}`)
     } catch {
@@ -139,7 +139,6 @@ export function ShareModal({ item, open, onClose }: Props) {
         return updated
       })
       setSelectedUsers([])
-      setUserSearch('')
       if (succeeded.length) toast.success(`Access granted to ${succeeded.length} user${succeeded.length > 1 ? 's' : ''}`)
       if (failCount) toast.error(`Failed to grant ${failCount} user${failCount > 1 ? 's' : ''}`)
     } catch (err: any) {
@@ -179,65 +178,41 @@ export function ShareModal({ item, open, onClose }: Props) {
             Select one or more users to grant permanent read access.
           </p>
 
-          {/* User picker — native datalist combobox */}
-          <div>
-            {(() => {
+          {/* User picker — scrollable list */}
+          <div className="flex flex-col gap-1 max-h-44 overflow-y-auto rounded-lg border border-vault-border bg-vault-surface">
+            {loadingList ? (
+              <p className="text-xs text-vault-muted text-center py-3 animate-pulse">Loading users…</p>
+            ) : (() => {
               const alreadyGrantedIds = new Set(grants.map((g) => g.granted_to_id).filter(Boolean))
-              return (
-                <datalist id="grant-users-list">
-                  {users
-                    .filter((u) => !alreadyGrantedIds.has(u.id) && !selectedUsers.find((s) => s.id === u.id))
-                    .map((u) => <option key={u.id} value={`${u.username} — ${u.email}`} />)}
-                </datalist>
-              )
-            })()}
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface focus-within:border-vault-primary transition-colors">
-              <Search size={13} className="text-vault-muted shrink-0" />
-              <input
-                type="text"
-                list="grant-users-list"
-                className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
-                placeholder={loadingList ? 'Loading users…' : 'Search or pick a user…'}
-                value={userSearch}
-                onChange={(e) => {
-                  const val = e.target.value
-                  setUserSearch(val)
-                  const matched = users.find((u) => val === `${u.username} — ${u.email}`)
-                  if (matched && !selectedUsers.find((s) => s.id === matched.id)) {
-                    toggleUser(matched)
-                    setUserSearch('')
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Selected user chips */}
-          {selectedUsers.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {selectedUsers.map((user) => (
-                <span
-                  key={user.id}
-                  className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-vault-border bg-vault-surface text-[11px] font-medium text-vault-text"
-                >
-                  {user.username}
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
-                    user.role === 'team' ? 'bg-blue-500/20 text-blue-400' :
-                    user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
-                    'bg-orange-500/20 text-orange-400'
-                  }`}>
-                    {user.role}
-                  </span>
+              const available = users.filter((u) => !alreadyGrantedIds.has(u.id))
+              return available.length === 0 ? (
+                <p className="text-xs text-vault-muted text-center py-3">No users available</p>
+              ) : available.map((user) => {
+                const sel = !!selectedUsers.find((s) => s.id === user.id)
+                return (
                   <button
+                    key={user.id}
+                    type="button"
                     onClick={() => toggleUser(user)}
-                    className="text-vault-muted hover:text-vault-text transition-colors ml-0.5"
+                    className={`flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-vault-elevated ${sel ? 'bg-vault-elevated' : ''}`}
                   >
-                    <X size={10} />
+                    <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${sel ? 'bg-vault-primary border-vault-primary' : 'border-vault-border'}`}>
+                      {sel && <Check size={10} className="text-white" />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-xs font-medium text-vault-text truncate">{user.username}</p>
+                      <p className="text-[10px] text-vault-muted truncate">{user.email}</p>
+                    </div>
+                    <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
+                      user.role === 'team' ? 'bg-blue-500/20 text-blue-400' :
+                      user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
+                      'bg-orange-500/20 text-orange-400'
+                    }`}>{user.role}</span>
                   </button>
-                </span>
-              ))}
-            </div>
-          )}
+                )
+              })
+            })()}
+          </div>
 
           {selectedUsers.length > 0 && (
             <Button onClick={grantAccessToSelected} loading={granting} size="sm" className="self-end">
@@ -299,63 +274,56 @@ export function ShareModal({ item, open, onClose }: Props) {
             <Link2 size={12} /> Share Link (24 h)
           </p>
 
-          <p className="text-xs text-vault-muted -mb-1">Recipients (optional) — select users or type an email</p>
+          <p className="text-xs text-vault-muted -mb-1">Restrict to specific users (optional) — or leave all unchecked for an open link</p>
 
-          {/* Share-link user picker — native datalist combobox */}
-          <div>
-            <datalist id="share-users-list">
-              {users
-                .filter((u) => !selectedShareUsers.find((s) => s.id === u.id))
-                .map((u) => <option key={u.id} value={`${u.username} — ${u.email}`} />)}
-            </datalist>
-            <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface focus-within:border-vault-primary transition-colors">
-              <Search size={13} className="text-vault-muted shrink-0" />
-              <input
-                type="text"
-                list="share-users-list"
-                className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
-                placeholder={loadingList ? 'Loading users…' : 'Pick a user or type an email…'}
-                value={shareSearch}
-                onChange={(e) => {
-                  const val = e.target.value
-                  setShareSearch(val)
-                  const matched = users.find((u) => val === `${u.username} — ${u.email}`)
-                  if (matched && !selectedShareUsers.find((s) => s.id === matched.id)) {
-                    toggleShareUser(matched)
-                    setShareSearch('')
-                    setRecipientEmail('')
-                  } else {
-                    setRecipientEmail(val)
-                  }
-                }}
-              />
-            </div>
-          </div>
-
-          {/* Selected chips */}
-          {selectedShareUsers.length > 0 && (
-            <div className="flex flex-wrap gap-1.5">
-              {selectedShareUsers.map((user) => (
-                <span
+          {/* Share-link user picker — scrollable list */}
+          <div className="flex flex-col gap-1 max-h-36 overflow-y-auto rounded-lg border border-vault-border bg-vault-surface">
+            {loadingList ? (
+              <p className="text-xs text-vault-muted text-center py-3 animate-pulse">Loading users…</p>
+            ) : users.length === 0 ? (
+              <p className="text-xs text-vault-muted text-center py-3">No registered users</p>
+            ) : users.map((user) => {
+              const sel = !!selectedShareUsers.find((s) => s.id === user.id)
+              return (
+                <button
                   key={user.id}
-                  className="flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-full border border-vault-border bg-vault-surface text-[11px] font-medium text-vault-text"
+                  type="button"
+                  onClick={() => toggleShareUser(user)}
+                  className={`flex items-center gap-3 px-3 py-2 text-left transition-colors hover:bg-vault-elevated ${sel ? 'bg-vault-elevated' : ''}`}
                 >
-                  {user.username}
-                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium ${
+                  <div className={`w-4 h-4 rounded border flex items-center justify-center shrink-0 transition-colors ${sel ? 'bg-vault-primary border-vault-primary' : 'border-vault-border'}`}>
+                    {sel && <Check size={10} className="text-white" />}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-vault-text truncate">{user.username}</p>
+                    <p className="text-[10px] text-vault-muted truncate">{user.email}</p>
+                  </div>
+                  <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-medium shrink-0 ${
                     user.role === 'team' ? 'bg-blue-500/20 text-blue-400' :
                     user.role === 'admin' ? 'bg-purple-500/20 text-purple-400' :
                     'bg-orange-500/20 text-orange-400'
                   }`}>{user.role}</span>
-                  <button
-                    onClick={() => toggleShareUser(user)}
-                    className="text-vault-muted hover:text-vault-text transition-colors ml-0.5"
-                  >
-                    <X size={10} />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
+                </button>
+              )
+            })}
+          </div>
+
+          {/* Free-form email for non-registered users */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg border border-vault-border bg-vault-surface focus-within:border-vault-primary transition-colors">
+            <Mail size={13} className="text-vault-muted shrink-0" />
+            <input
+              type="email"
+              className="flex-1 bg-transparent text-xs text-vault-text outline-none placeholder:text-vault-muted"
+              placeholder="Or type an external email…"
+              value={recipientEmail}
+              onChange={(e) => setRecipientEmail(e.target.value)}
+            />
+            {recipientEmail && (
+              <button onClick={() => setRecipientEmail('')} className="text-vault-muted hover:text-vault-text">
+                <X size={12} />
+              </button>
+            )}
+          </div>
 
           <p className="text-xs text-vault-muted">
             Link expires in <span className="text-vault-primary font-medium">24 hours</span> · Requires login to view

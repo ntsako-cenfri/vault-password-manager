@@ -1,10 +1,12 @@
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.database import get_db
-from app.main import limiter
+from app.utils.limiter import limiter
 from app.models.user import User
 from app.repositories.grant_repository import GrantRepository
+from jose import JWTError
+
 from app.schemas.auth import (
     LoginRequest,
     PasswordResetRequest,
@@ -12,7 +14,12 @@ from app.schemas.auth import (
     RegisterRequest,
     SetupRequest,
     TokenResponse,
+    TotpDisableRequest,
+    TotpEnableRequest,
+    TotpSetupResponse,
+    TotpVerifyLoginRequest,
 )
+from app.utils.security import decode_invite_token
 from app.schemas.user import UserOut
 from app.services.auth_service import AuthService
 from app.utils.dependencies import get_current_user
@@ -36,6 +43,13 @@ async def create_first_admin(body: SetupRequest, db: AsyncSession = Depends(get_
 
 @router.post("/register", response_model=UserOut, status_code=201)
 async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
+    if body.invite_token:
+        try:
+            invited_email = decode_invite_token(body.invite_token)
+        except JWTError:
+            raise HTTPException(status_code=400, detail="Invalid or expired invite link")
+        if invited_email.lower() != body.email.lower():
+            raise HTTPException(status_code=400, detail="Email does not match the invite link")
     svc = AuthService(db)
     user = await svc.register(body)
     # Activate any pending grants that were shared to this email before registration
@@ -87,3 +101,49 @@ async def reset_password(
 @router.get("/me", response_model=UserOut)
 async def me(current_user: User = Depends(get_current_user)):
     return current_user
+
+
+# ── TOTP 2FA ──────────────────────────────────────────────────────────────────
+
+@router.post("/totp/setup", response_model=TotpSetupResponse)
+async def totp_setup(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Generate a new TOTP secret + otpauth URI. Scan QR code then call /totp/enable."""
+    svc = AuthService(db)
+    return await svc.setup_totp(current_user)
+
+
+@router.post("/totp/enable", status_code=204)
+async def totp_enable(
+    body: TotpEnableRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Confirm TOTP setup by submitting the first code from the authenticator app."""
+    svc = AuthService(db)
+    await svc.enable_totp(current_user, body.code)
+
+
+@router.post("/totp/disable", status_code=204)
+async def totp_disable(
+    body: TotpDisableRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Disable TOTP. Requires a valid current code to prevent accidental lockout."""
+    svc = AuthService(db)
+    await svc.disable_totp(current_user, body.code)
+
+
+@router.post("/totp/verify-login", response_model=TokenResponse)
+@limiter.limit("10/minute")
+async def totp_verify_login(
+    request: Request,
+    body: TotpVerifyLoginRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Exchange a valid MFA challenge token + TOTP code for full access/refresh tokens."""
+    svc = AuthService(db)
+    return await svc.verify_totp_login(body.mfa_token, body.code)

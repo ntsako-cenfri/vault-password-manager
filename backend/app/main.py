@@ -2,18 +2,16 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-from slowapi.util import get_remote_address
 
 from app.config import settings
 from app.database import Base, engine
+from app.utils.limiter import limiter
 from app.routers import auth, shares, users, vault
 import app.models.item_grant  # noqa: F401 – registers table with Base.metadata
 import app.models.audit_log   # noqa: F401 – registers table with Base.metadata
 import app.models.revoked_token  # noqa: F401 – registers table with Base.metadata
-
-limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useSearchParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ShieldCheck } from 'lucide-react'
 import { LoginForm } from '@/components/auth/LoginForm'
@@ -7,7 +7,9 @@ import { RegisterForm } from '@/components/auth/RegisterForm'
 import { useAuthStore } from '@/store/authStore'
 
 export default function LoginPage() {
-  const [mode, setMode] = useState<'login' | 'register'>('login')
+  const [searchParams] = useSearchParams()
+  const inviteToken = searchParams.get('invite') ?? undefined
+  const [mode, setMode] = useState<'login' | 'register'>(inviteToken ? 'register' : 'login')
   const { user, loading } = useAuthStore()
 
   // Already authenticated — go straight to the dashboard
@@ -38,7 +40,7 @@ export default function LoginPage() {
         {mode === 'login' ? (
           <LoginForm onSwitchToRegister={() => setMode('register')} />
         ) : (
-          <RegisterForm onSwitchToLogin={() => setMode('login')} />
+          <RegisterForm onSwitchToLogin={() => setMode('login')} inviteToken={inviteToken} />
         )}
       </motion.div>
     </div>

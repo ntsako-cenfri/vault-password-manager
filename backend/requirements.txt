@@ -12,6 +12,7 @@ cryptography==42.0.7
 python-multipart==0.0.9
 aiofiles==23.2.1
 slowapi==0.1.9
+pyotp==2.9.0
 
 # Testing
 pytest==8.2.0

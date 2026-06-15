@@ -1,13 +1,13 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Share2, Trash2, Clock, User as UserIcon } from 'lucide-react'
-import { clsx } from 'clsx'
+import { Eye, EyeOff, Share2, Trash2, Clock, User as UserIcon, Copy } from 'lucide-react'
 import toast from 'react-hot-toast'
+import { clsx } from 'clsx'
 import { vaultApi } from '@/api/vault'
 import { useVaultStore } from '@/store/vaultStore'
 import { Button } from '@/components/ui/Button'
-import { FIELD_TYPE_LABELS, FILE_FIELD_TYPES } from '@/types'
+import { FIELD_TYPE_LABELS, FILE_FIELD_TYPES, SENSITIVE_FIELD_TYPES } from '@/types'
 import type { VaultItem } from '@/types'
 
 interface Props {
@@ -39,7 +39,7 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
     }
   }
 
-  const sensitiveTypes = ['password', 'api_key', 'ssh_key']
+  const isSensitive = (ft: string) => SENSITIVE_FIELD_TYPES.includes(ft as any)
 
   return (
     <motion.div
@@ -83,8 +83,8 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
         <div className="flex flex-col gap-2">
           {item.fields.slice(0, 4).map((field) => {
             const isFile = FILE_FIELD_TYPES.includes(field.field_type)
-            const isSensitive = sensitiveTypes.includes(field.field_type)
-            const isHidden = isSensitive && !revealed[field.id]
+            const sensitive = isSensitive(field.field_type)
+            const isHidden = sensitive && !revealed[field.id]
 
             return (
               <div key={field.id} className="flex items-center gap-2 text-xs">
@@ -98,12 +98,26 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
                 )}>
                   {isFile ? field.original_filename ?? '—' : (field.value ?? '—')}
                 </span>
-                {isSensitive && (
+                {sensitive && (
                   <button
                     onClick={() => toggle(field.id)}
                     className="text-vault-muted hover:text-vault-text shrink-0"
+                    title={revealed[field.id] ? 'Hide' : 'Show'}
                   >
                     {revealed[field.id] ? <EyeOff size={12} /> : <Eye size={12} />}
+                  </button>
+                )}
+                {!isFile && field.value && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      navigator.clipboard.writeText(field.value ?? '')
+                      toast.success('Copied!')
+                    }}
+                    className="text-vault-muted hover:text-vault-text shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    title="Copy value"
+                  >
+                    <Copy size={12} />
                   </button>
                 )}
               </div>

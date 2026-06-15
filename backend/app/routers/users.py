@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -8,12 +8,13 @@ from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.grant import GrantedItemOut, UserVaultResponse
-from app.schemas.user import RoleUpdateRequest, UserOut
+from app.schemas.user import InviteOut, InviteRequest, RoleUpdateRequest, UserOut
 from app.schemas.vault import VaultItemOut
 from app.services.encryption_service import EncryptionService
 from app.services.user_service import UserService
 from app.services.vault_service import VaultService
 from app.utils.dependencies import get_current_user, require_admin
+from app.utils.security import create_invite_token
 
 router = APIRouter(prefix="/users", tags=["users"])
 
@@ -93,6 +94,33 @@ async def get_user_vault(
             for g, item in shared_pairs
         ],
     )
+
+
+@router.post("/invite", response_model=list[InviteOut], status_code=201)
+async def invite_users(
+    body: InviteRequest,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin or Team can generate invite links for one or more email addresses."""
+    from app.models.user import UserRole
+    if current_user.role == UserRole.external:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient role")
+
+    base_url = str(request.base_url).rstrip("/")
+    results: list[InviteOut] = []
+    for email in body.emails:
+        token = create_invite_token(str(email))
+        results.append(
+            InviteOut(
+                email=str(email),
+                token=token,
+                invite_link=f"{base_url}/login?invite={token}",
+                expires_in_days=7,
+            )
+        )
+    return results
 
 
 @router.get("/audit-log")

@@ -1,23 +1,35 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { UserPlus, Eye, EyeOff } from 'lucide-react'
+import { UserPlus, Eye, EyeOff, Lock } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { authApi } from '@/api/auth'
 import { useAuthStore } from '@/store/authStore'
 import { Input } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 
+function parseInviteEmail(token: string): string | null {
+  try {
+    const payload = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')))
+    return payload.sub ?? null
+  } catch {
+    return null
+  }
+}
+
 interface Props {
   onSwitchToLogin: () => void
   /** Optional: after registering, auto-redirect to a share token */
   shareToken?: string
+  /** Optional: signed invite token — pre-fills and locks the email field */
+  inviteToken?: string
 }
 
-export function RegisterForm({ onSwitchToLogin, shareToken }: Props) {
+export function RegisterForm({ onSwitchToLogin, shareToken, inviteToken }: Props) {
   const login = useAuthStore((s) => s.login)
   const navigate = useNavigate()
-  const [email, setEmail] = useState('')
+  const inviteEmail = inviteToken ? parseInviteEmail(inviteToken) : null
+  const [email, setEmail] = useState(inviteEmail ?? '')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
@@ -27,7 +39,7 @@ export function RegisterForm({ onSwitchToLogin, shareToken }: Props) {
     e.preventDefault()
     setLoading(true)
     try {
-      await authApi.register(email, username, password)
+      await authApi.register(email, username, password, inviteToken)
       await login(email, password)
       if (shareToken) {
         navigate(`/share/${shareToken}`, { replace: true })
@@ -55,20 +67,31 @@ export function RegisterForm({ onSwitchToLogin, shareToken }: Props) {
         <div>
           <h1 className="text-lg font-semibold">Create Account</h1>
           <p className="text-xs text-vault-muted">
-            {shareToken ? 'Register to access the shared item' : 'Join your team vault'}
+            {inviteEmail
+              ? `You've been invited to join`
+              : shareToken
+              ? 'Register to access the shared item'
+              : 'Join your team vault'}
           </p>
         </div>
       </div>
 
-      <Input
-        label="Email"
-        type="email"
-        placeholder="you@company.com"
-        value={email}
-        onChange={(e) => setEmail(e.target.value)}
-        required
-        autoFocus
-      />
+      <div className="relative">
+        <Input
+          label="Email"
+          type="email"
+          placeholder="you@company.com"
+          value={email}
+          onChange={(e) => !inviteEmail && setEmail(e.target.value)}
+          readOnly={!!inviteEmail}
+          required
+          autoFocus={!inviteEmail}
+          className={inviteEmail ? 'pr-8 opacity-75 cursor-not-allowed' : ''}
+        />
+        {inviteEmail && (
+          <Lock size={13} className="absolute right-3 bottom-2.5 text-vault-muted pointer-events-none" />
+        )}
+      </div>
 
       <Input
         label="Username"
@@ -76,6 +99,7 @@ export function RegisterForm({ onSwitchToLogin, shareToken }: Props) {
         value={username}
         onChange={(e) => setUsername(e.target.value)}
         required
+        autoFocus={!!inviteEmail}
       />
 
       <div className="relative">

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ShieldCheck, Eye, EyeOff } from 'lucide-react'
+import { ShieldCheck, Eye, EyeOff, Smartphone } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
 import { Input } from '@/components/ui/Input'
@@ -13,23 +13,92 @@ interface Props {
 
 export function LoginForm({ onSwitchToRegister }: Props) {
   const login = useAuthStore((s) => s.login)
+  const verifyMfa = useAuthStore((s) => s.verifyMfa)
   const navigate = useNavigate()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [showPw, setShowPw] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [mfaToken, setMfaToken] = useState<string | null>(null)
+  const [totpCode, setTotpCode] = useState('')
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setLoading(true)
     try {
-      await login(email, password)
-      navigate('/dashboard', { replace: true })
+      const result = await login(email, password)
+      if (result?.mfa_required) {
+        setMfaToken(result.mfa_token)
+      } else {
+        navigate('/dashboard', { replace: true })
+      }
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Login failed')
     } finally {
       setLoading(false)
     }
+  }
+
+  const handleMfaSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    if (!mfaToken) return
+    setLoading(true)
+    try {
+      await verifyMfa(mfaToken, totpCode)
+      navigate('/dashboard', { replace: true })
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Invalid code')
+      setTotpCode('')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (mfaToken) {
+    return (
+      <motion.form
+        onSubmit={handleMfaSubmit}
+        className="flex flex-col gap-4"
+        initial={{ opacity: 0, y: 10 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="flex items-center gap-3 mb-2">
+          <div className="p-2 rounded-xl bg-vault-primary/10 text-vault-primary">
+            <Smartphone size={20} />
+          </div>
+          <div>
+            <h1 className="text-lg font-semibold">Two-Factor Auth</h1>
+            <p className="text-xs text-vault-muted">Enter the 6-digit code from your authenticator app</p>
+          </div>
+        </div>
+
+        <Input
+          label="Authenticator code"
+          type="text"
+          inputMode="numeric"
+          pattern="[0-9]{6}"
+          maxLength={6}
+          placeholder="000000"
+          value={totpCode}
+          onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+          required
+          autoFocus
+          className="text-center text-2xl tracking-[0.5em] font-mono"
+        />
+
+        <Button type="submit" loading={loading} className="mt-1 w-full" size="lg">
+          Verify
+        </Button>
+
+        <button
+          type="button"
+          onClick={() => { setMfaToken(null); setTotpCode('') }}
+          className="text-center text-xs text-vault-muted hover:text-vault-text"
+        >
+          ← Back to login
+        </button>
+      </motion.form>
+    )
   }
 
   return (

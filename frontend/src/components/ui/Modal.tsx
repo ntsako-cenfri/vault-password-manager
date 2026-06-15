@@ -31,19 +31,19 @@ export function Modal({ open, onClose, title, children, maxWidth = 'max-w-lg' }:
           <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
           <motion.div
-            className={`relative glass rounded-2xl w-full ${maxWidth} shadow-2xl`}
+            className={`relative glass rounded-2xl w-full ${maxWidth} shadow-2xl flex flex-col max-h-[calc(100vh-4rem)]`}
             initial={{ scale: 0.95, opacity: 0, y: 12 }}
             animate={{ scale: 1, opacity: 1, y: 0 }}
             exit={{ scale: 0.95, opacity: 0, y: 12 }}
             transition={{ type: 'spring', damping: 20, stiffness: 300 }}
           >
-            <div className="flex items-center justify-between p-5 border-b border-vault-border">
+            <div className="flex items-center justify-between p-5 border-b border-vault-border shrink-0">
               <h2 className="text-base font-semibold text-vault-text">{title}</h2>
               <Button variant="ghost" size="sm" onClick={onClose} className="!p-1.5">
                 <X size={16} />
               </Button>
             </div>
-            <div className="p-5">{children}</div>
+            <div className="p-5 overflow-y-auto">{children}</div>
           </motion.div>
         </motion.div>
       )}

@@ -9,11 +9,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sess
 
 from app.database import Base, get_db
 from app.main import app
+from app.utils.limiter import limiter
 
 TEST_DB_URL = "sqlite+aiosqlite:///:memory:"
 
 _engine = create_async_engine(TEST_DB_URL, connect_args={"check_same_thread": False})
 _TestSession = async_sessionmaker(bind=_engine, class_=AsyncSession, expire_on_commit=False)
+
+# Disable rate limiting during tests
+limiter.enabled = False
 
 
 @pytest.fixture(scope="session")

@@ -1,6 +1,7 @@
 """Auth business logic — kept deliberately lean; no DB access here."""
 from datetime import datetime, timezone
 
+import pyotp
 from fastapi import HTTPException, status
 from jose import JWTError
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,7 +13,9 @@ from app.schemas.auth import LoginRequest, RegisterRequest, SetupRequest
 from app.services.audit_service import AuditService
 from app.utils.security import (
     create_access_token,
+    create_mfa_token,
     create_refresh_token,
+    decode_mfa_token,
     decode_token,
     hash_password,
     verify_password,
@@ -87,6 +90,67 @@ class AuthService:
             actor_email=user.email,
             ip_address=ip,
         )
+        if user.totp_enabled:
+            return {
+                "mfa_required": True,
+                "mfa_token": create_mfa_token(str(user.id)),
+                "access_token": "",
+                "refresh_token": "",
+                "token_type": "bearer",
+            }
+        return self._issue_tokens(user)
+
+    # ── TOTP 2FA ──────────────────────────────────────────────────────────────
+
+    async def setup_totp(self, user: User) -> dict:
+        """Generate a new TOTP secret and save it (not yet enabled until verify)."""
+        secret = pyotp.random_base32()
+        user.totp_secret = secret
+        user.totp_enabled = False
+        await self._repo.save(user)
+        totp = pyotp.TOTP(secret)
+        uri = totp.provisioning_uri(name=user.email, issuer_name="Vault PM")
+        return {"secret": secret, "otpauth_uri": uri}
+
+    async def enable_totp(self, user: User, code: str) -> None:
+        """Verify the first TOTP code and mark 2FA as enabled."""
+        if not user.totp_secret:
+            raise HTTPException(status_code=400, detail="Start 2FA setup first")
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(code, valid_window=1):
+            raise HTTPException(status_code=400, detail="Invalid code")
+        user.totp_enabled = True
+        await self._repo.save(user)
+        await self._audit.log("auth.totp_enabled", actor_id=str(user.id), actor_email=user.email)
+
+    async def disable_totp(self, user: User, code: str) -> None:
+        """Verify current TOTP code then disable 2FA."""
+        if not user.totp_enabled or not user.totp_secret:
+            raise HTTPException(status_code=400, detail="2FA is not enabled")
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(code, valid_window=1):
+            raise HTTPException(status_code=400, detail="Invalid code")
+        user.totp_enabled = False
+        user.totp_secret = None
+        await self._repo.save(user)
+        await self._audit.log("auth.totp_disabled", actor_id=str(user.id), actor_email=user.email)
+
+    async def verify_totp_login(self, mfa_token: str, code: str) -> dict:
+        """Verify MFA challenge token + TOTP code, return full JWT tokens."""
+        try:
+            user_id = decode_mfa_token(mfa_token)
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid or expired MFA session")
+        user = await self._repo.get_by_id(user_id)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found")
+        if not user.totp_enabled or not user.totp_secret:
+            raise HTTPException(status_code=400, detail="2FA not configured")
+        totp = pyotp.TOTP(user.totp_secret)
+        if not totp.verify(code, valid_window=1):
+            await self._audit.log("auth.totp_failed", actor_id=str(user.id), actor_email=user.email)
+            raise HTTPException(status_code=401, detail="Invalid authenticator code")
+        await self._audit.log("auth.totp_verified", actor_id=str(user.id), actor_email=user.email)
         return self._issue_tokens(user)
 
     # ── Logout — revoke the current access token ──────────────────────────────

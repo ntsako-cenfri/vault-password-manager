@@ -6,7 +6,8 @@ interface AuthState {
   user: User | null
   loading: boolean
   hydrate: () => Promise<void>
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<{ mfa_required: true; mfa_token: string } | void>
+  verifyMfa: (mfa_token: string, code: string) => Promise<void>
   logout: () => void
 }
 
@@ -29,6 +30,17 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     const { data } = await authApi.login(email, password)
+    if (data.mfa_required && data.mfa_token) {
+      return { mfa_required: true, mfa_token: data.mfa_token }
+    }
+    localStorage.setItem('access_token', data.access_token)
+    localStorage.setItem('refresh_token', data.refresh_token)
+    const me = await authApi.me()
+    set({ user: me.data })
+  },
+
+  verifyMfa: async (mfa_token, code) => {
+    const { data } = await authApi.totpVerifyLogin(mfa_token, code)
     localStorage.setItem('access_token', data.access_token)
     localStorage.setItem('refresh_token', data.refresh_token)
     const me = await authApi.me()
@@ -41,3 +53,4 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: null })
   },
 }))
+
