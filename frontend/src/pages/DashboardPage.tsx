@@ -1,34 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Search, LayoutGrid, Users, ChevronDown, ChevronRight } from 'lucide-react'
+import { Plus, Search, LayoutGrid, Users, ChevronDown, ChevronRight, X } from 'lucide-react'
 import { Layout } from '@/components/layout/Layout'
 import { VaultItemCard } from '@/components/vault/VaultItemCard'
 import { ShareModal } from '@/components/vault/ShareModal'
 import { Button } from '@/components/ui/Button'
 import { useVaultStore } from '@/store/vaultStore'
+import { groupItems } from '@/utils/groups'
 import type { VaultItem } from '@/types'
-import { useNavigate } from 'react-router-dom'
-
-const UNGROUPED = 'Other'
-
-/** Groups by the item's own `category` field. Uncategorized items land in "Other". */
-function groupItems(items: VaultItem[]): Map<string, VaultItem[]> {
-  const groups = new Map<string, VaultItem[]>()
-  for (const item of items) {
-    const key = item.category?.trim() || UNGROUPED
-    const list = groups.get(key)
-    if (list) list.push(item)
-    else groups.set(key, [item])
-  }
-  // Named groups alphabetically first, "Other" always last.
-  return new Map(
-    [...groups.entries()].sort(([a], [b]) => {
-      if (a === UNGROUPED) return 1
-      if (b === UNGROUPED) return -1
-      return a.localeCompare(b)
-    })
-  )
-}
+import { useNavigate, useSearchParams } from 'react-router-dom'
 
 export default function DashboardPage() {
   const navigate = useNavigate()
@@ -36,6 +16,8 @@ export default function DashboardPage() {
   const [search, setSearch] = useState('')
   const [shareTarget, setShareTarget] = useState<VaultItem | null>(null)
   const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
+  const [searchParams, setSearchParams] = useSearchParams()
+  const groupFilter = searchParams.get('group')
 
   useEffect(() => {
     fetch()
@@ -55,11 +37,14 @@ export default function DashboardPage() {
   }, [fetch, fetchShared])
 
   const q = search.toLowerCase()
-  const filtered = items.filter((i) =>
-    i.title.toLowerCase().includes(q) ||
-    i.description?.toLowerCase().includes(q) ||
-    i.category?.toLowerCase().includes(q)
-  )
+  const filtered = items.filter((i) => {
+    const matchesSearch =
+      i.title.toLowerCase().includes(q) ||
+      (i.description?.toLowerCase().includes(q) ?? false) ||
+      (i.category?.toLowerCase().includes(q) ?? false)
+    const matchesGroup = !groupFilter || (i.category?.trim() || 'Other') === groupFilter
+    return matchesSearch && matchesGroup
+  })
   const filteredShared = sharedItems.filter((gi) =>
     gi.item.title.toLowerCase().includes(q) ||
     gi.item.description?.toLowerCase().includes(q)
@@ -69,6 +54,12 @@ export default function DashboardPage() {
 
   const toggleGroup = (key: string) =>
     setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))
+
+  const clearGroupFilter = () => setSearchParams((prev) => {
+    const next = new URLSearchParams(prev)
+    next.delete('group')
+    return next
+  })
 
   return (
     <Layout>
@@ -84,7 +75,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Search */}
-      <div className="relative mb-6">
+      <div className="relative mb-3">
         <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-vault-muted" />
         <input
           value={search}
@@ -94,6 +85,16 @@ export default function DashboardPage() {
         />
       </div>
 
+      {/* Active group filter (set via the sidebar) */}
+      {groupFilter && (
+        <button
+          onClick={clearGroupFilter}
+          className="inline-flex items-center gap-1.5 mb-6 px-2.5 py-1 rounded-full text-xs font-medium bg-vault-primary/10 text-vault-primary hover:bg-vault-primary/20 transition-colors"
+        >
+          Group: {groupFilter} <X size={11} />
+        </button>
+      )}
+
       {/* My Vault */}
       {loading ? (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -101,7 +102,7 @@ export default function DashboardPage() {
             <div key={i} className="glass rounded-2xl h-40 animate-pulse" />
           ))}
         </div>
-      ) : filtered.length === 0 && !search ? (
+      ) : filtered.length === 0 && !search && !groupFilter ? (
         <motion.div
           className="flex flex-col items-center gap-3 py-20 text-center"
           initial={{ opacity: 0 }}
@@ -143,14 +144,14 @@ export default function DashboardPage() {
               </div>
             )
           })}
-          {search && filtered.length === 0 && filteredShared.length === 0 && (
-            <p className="text-vault-muted text-sm text-center py-10">No items match your search</p>
+          {filtered.length === 0 && (search || groupFilter) && (
+            <p className="text-vault-muted text-sm text-center py-10">No items match{search ? ' your search' : ' this group'}</p>
           )}
         </>
       )}
 
       {/* Shared with me */}
-      {(sharedItems.length > 0 || sharedLoading) && (
+      {!groupFilter && (sharedItems.length > 0 || sharedLoading) && (
         <div className="mt-2">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-1.5 rounded-lg bg-vault-accent/10 text-vault-accent">
