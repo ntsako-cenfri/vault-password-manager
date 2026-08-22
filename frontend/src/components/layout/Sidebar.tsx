@@ -1,12 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom'
 import {
-  ShieldCheck, LayoutGrid, Users, LogOut, Settings, ChevronRight, ChevronDown, X, UserPlus
+  ShieldCheck, LayoutGrid, Users, LogOut, Settings, ChevronRight, ChevronDown, X, UserPlus, Plus, Trash2
 } from 'lucide-react'
 import { clsx } from 'clsx'
+import toast from 'react-hot-toast'
 import { useAuthStore } from '@/store/authStore'
-import { useVaultStore } from '@/store/vaultStore'
-import { groupNames } from '@/utils/groups'
+import { useGroupsStore } from '@/store/groupsStore'
+import { groupsApi } from '@/api/groups'
 import { InviteModal } from '@/components/ui/InviteModal'
 
 interface Props {
@@ -16,28 +17,56 @@ interface Props {
 
 export function Sidebar({ open = false, onClose }: Props) {
   const { user, logout } = useAuthStore()
-  const { items, fetch } = useVaultStore()
+  const { groups, fetch: fetchGroups, add: addGroup, remove: removeGroup } = useGroupsStore()
   const navigate = useNavigate()
   const location = useLocation()
   const [searchParams] = useSearchParams()
   const [inviteOpen, setInviteOpen] = useState(false)
   const [vaultExpanded, setVaultExpanded] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
 
-  // The sidebar needs the item list too (to know what groups exist) — this
-  // mounts on every authenticated page, so it doubles as an early prefetch
-  // for the dashboard. Cheap and idempotent.
-  useEffect(() => { fetch() }, [fetch])
+  // Mounts on every authenticated page, so it doubles as an early prefetch
+  // for wherever the group list is needed next (dashboard, item form).
+  useEffect(() => { fetchGroups() }, [fetchGroups])
 
   const handleLogout = () => { logout(); navigate('/login') }
   const handleNav = () => { onClose?.() }
 
-  const groups = groupNames(items)
   const onDashboard = location.pathname === '/dashboard'
   const activeGroup = onDashboard ? searchParams.get('group') : null
 
   const otherLinks = [
     ...(user?.role !== 'external' ? [{ to: '/admin', label: 'Users', icon: Users }] : []),
   ]
+
+  const submitNewGroup = async () => {
+    const name = newGroupName.trim()
+    if (!name) { setCreating(false); return }
+    try {
+      const { data } = await groupsApi.create(name)
+      addGroup(data)
+      toast.success(`Group "${data.name}" created`)
+    } catch {
+      toast.error('Could not create group')
+    } finally {
+      setCreating(false)
+      setNewGroupName('')
+    }
+  }
+
+  const handleDeleteGroup = async (e: React.MouseEvent, id: string, name: string) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (!confirm(`Delete group "${name}"? Items already filed under it keep their label — this just removes it from this list.`)) return
+    try {
+      await groupsApi.delete(id)
+      removeGroup(id)
+      toast.success('Group deleted')
+    } catch {
+      toast.error('Could not delete group')
+    }
+  }
 
   return (
     <>
@@ -97,34 +126,62 @@ export function Sidebar({ open = false, onClose }: Props) {
                 <LayoutGrid size={16} />
                 Vault
               </NavLink>
-              {groups.length > 0 && (
-                <button
-                  onClick={() => setVaultExpanded((v) => !v)}
-                  className="px-2 py-2.5 text-vault-muted hover:text-vault-text transition-colors"
-                  aria-label={vaultExpanded ? 'Collapse groups' : 'Expand groups'}
-                >
-                  {vaultExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                </button>
-              )}
+              <button
+                onClick={() => setVaultExpanded((v) => !v)}
+                className="px-2 py-2.5 text-vault-muted hover:text-vault-text transition-colors"
+                aria-label={vaultExpanded ? 'Collapse groups' : 'Expand groups'}
+              >
+                {vaultExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+              </button>
             </div>
 
-            {vaultExpanded && groups.length > 0 && (
+            {vaultExpanded && (
               <div className="ml-4 pl-3 border-l border-vault-border flex flex-col gap-0.5 mt-1 mb-1">
                 {groups.map((g) => (
-                  <Link
-                    key={g}
-                    to={`/dashboard?group=${encodeURIComponent(g)}`}
-                    onClick={handleNav}
-                    className={clsx(
-                      'px-2.5 py-1.5 rounded-md text-xs font-medium truncate transition-colors',
-                      activeGroup === g
-                        ? 'bg-vault-primary/10 text-vault-primary'
-                        : 'text-vault-muted hover:bg-vault-elevated hover:text-vault-text',
-                    )}
-                  >
-                    {g}
-                  </Link>
+                  <div key={g.id} className="flex items-center group/g">
+                    <Link
+                      to={`/dashboard?group=${encodeURIComponent(g.name)}`}
+                      onClick={handleNav}
+                      className={clsx(
+                        'flex-1 px-2.5 py-1.5 rounded-md text-xs font-medium truncate transition-colors',
+                        activeGroup === g.name
+                          ? 'bg-vault-primary/10 text-vault-primary'
+                          : 'text-vault-muted hover:bg-vault-elevated hover:text-vault-text',
+                      )}
+                    >
+                      {g.name}
+                    </Link>
+                    <button
+                      onClick={(e) => handleDeleteGroup(e, g.id, g.name)}
+                      className="px-1.5 text-vault-muted/0 group-hover/g:text-vault-muted hover:!text-vault-danger transition-colors"
+                      title="Delete group"
+                    >
+                      <Trash2 size={11} />
+                    </button>
+                  </div>
                 ))}
+
+                {creating ? (
+                  <input
+                    autoFocus
+                    value={newGroupName}
+                    onChange={(e) => setNewGroupName(e.target.value)}
+                    onBlur={submitNewGroup}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') submitNewGroup()
+                      if (e.key === 'Escape') { setCreating(false); setNewGroupName('') }
+                    }}
+                    placeholder="Group name…"
+                    className="mx-0.5 bg-vault-elevated border border-vault-border rounded-md px-2 py-1 text-xs text-vault-text placeholder:text-vault-muted/50 outline-none focus:border-vault-primary transition-colors"
+                  />
+                ) : (
+                  <button
+                    onClick={() => setCreating(true)}
+                    className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-xs font-medium text-vault-muted hover:bg-vault-elevated hover:text-vault-text transition-colors"
+                  >
+                    <Plus size={12} /> New Group
+                  </button>
+                )}
               </div>
             )}
           </div>

@@ -3,7 +3,7 @@
  * Supports creating a new item with all credential fields,
  * or editing an existing item (loads current data, handles file uploads).
  */
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Save, UserCheck, Clock, Trash2, Lock } from 'lucide-react'
@@ -11,6 +11,7 @@ import toast from 'react-hot-toast'
 import { vaultApi } from '@/api/vault'
 import { grantsApi } from '@/api/grants'
 import { useVaultStore } from '@/store/vaultStore'
+import { useGroupsStore } from '@/store/groupsStore'
 import { useAuthStore } from '@/store/authStore'
 import { Layout } from '@/components/layout/Layout'
 import { CredentialFieldEditor } from '@/components/vault/CredentialFieldEditor'
@@ -29,8 +30,7 @@ export default function VaultItemPage() {
   const upsert = useVaultStore((s) => s.upsert)
   const upsertShared = useVaultStore((s) => s.upsertShared)
   const currentUser = useAuthStore((s) => s.user)
-  const allItems = useVaultStore((s) => s.items)
-  const fetchItems = useVaultStore((s) => s.fetch)
+  const { groups, fetch: fetchGroups } = useGroupsStore()
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
@@ -43,12 +43,9 @@ export default function VaultItemPage() {
   const [preview, setPreview] = useState<{ filename: string; content: string; fieldId: string } | null>(null)
 
   // Existing groups, for the datalist suggestions below — lets you pick a group
-  // that's already in use, or just type a new name to create one on the fly.
-  useEffect(() => { fetchItems() }, [fetchItems])
-  const categoryOptions = useMemo(
-    () => Array.from(new Set(allItems.map((i) => i.category).filter((c): c is string => !!c))).sort(),
-    [allItems]
-  )
+  // that's already been created (even an empty one), or type a new name to
+  // create it on the fly.
+  useEffect(() => { fetchGroups() }, [fetchGroups])
 
   // Load existing item in edit mode
   useEffect(() => {
@@ -165,6 +162,7 @@ export default function VaultItemPage() {
       } else {
         upsertShared(item)
       }
+      fetchGroups() // pick up a brand-new group name typed above
       toast.success(isNew ? 'Item created' : 'Item updated')
       navigate('/dashboard')
     } catch (err: any) {
@@ -270,7 +268,7 @@ export default function VaultItemPage() {
               list="category-suggestions"
             />
             <datalist id="category-suggestions">
-              {categoryOptions.map((c) => <option key={c} value={c} />)}
+              {groups.map((g) => <option key={g.id} value={g.name} />)}
             </datalist>
           </div>
 

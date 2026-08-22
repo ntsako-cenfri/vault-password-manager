@@ -8,10 +8,11 @@ from slowapi.errors import RateLimitExceeded
 from app.config import settings
 from app.database import Base, engine
 from app.utils.limiter import limiter
-from app.routers import auth, shares, users, vault
+from app.routers import auth, shares, users, vault, groups
 import app.models.item_grant  # noqa: F401 – registers table with Base.metadata
 import app.models.audit_log   # noqa: F401 – registers table with Base.metadata
 import app.models.revoked_token  # noqa: F401 – registers table with Base.metadata
+import app.models.group  # noqa: F401 – registers table with Base.metadata
 
 
 @asynccontextmanager
@@ -54,6 +55,7 @@ app.include_router(auth.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(vault.router, prefix="/api")
 app.include_router(shares.router, prefix="/api")
+app.include_router(groups.router, prefix="/api")
 
 
 @app.get("/api/health")

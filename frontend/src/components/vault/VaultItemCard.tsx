@@ -6,9 +6,9 @@ import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import { vaultApi } from '@/api/vault'
 import { useVaultStore } from '@/store/vaultStore'
+import { useGroupsStore } from '@/store/groupsStore'
 import { Button } from '@/components/ui/Button'
 import { FIELD_TYPE_LABELS, FILE_FIELD_TYPES, SENSITIVE_FIELD_TYPES } from '@/types'
-import { groupNames } from '@/utils/groups'
 import type { VaultItem } from '@/types'
 
 interface Props {
@@ -20,7 +20,8 @@ interface Props {
 
 export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Props) {
   const navigate = useNavigate()
-  const { items, remove: removeFromStore, upsert } = useVaultStore()
+  const { remove: removeFromStore, upsert } = useVaultStore()
+  const { groups, fetch: fetchGroups } = useGroupsStore()
   const [revealed, setRevealed] = useState<Record<string, boolean>>({})
   const [deleting, setDeleting] = useState(false)
   const [editingGroup, setEditingGroup] = useState(false)
@@ -54,6 +55,7 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
     try {
       const { data } = await vaultApi.update(item.id, { category: groupDraft })
       upsert(data)
+      fetchGroups() // pick up a newly-typed group name so the sidebar stays in sync
       toast.success(data.category ? `Moved to "${data.category}"` : 'Removed from group')
     } catch {
       toast.error('Could not update group')
@@ -64,7 +66,6 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
   }
 
   const isSensitive = (ft: string) => SENSITIVE_FIELD_TYPES.includes(ft as any)
-  const existingGroups = groupNames(items).filter((g) => g !== 'Other')
 
   return (
     <motion.div
@@ -106,7 +107,8 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
         )}
       </div>
 
-      {/* Group badge / inline editor */}
+      {/* Group badge / inline editor — always visible, not hover-only, so it's
+          obvious at a glance which group an item is in (or that it has none). */}
       {!readOnly && editingGroup ? (
         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
           <input
@@ -119,19 +121,23 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
             className="flex-1 bg-vault-elevated border border-vault-border rounded-lg px-2.5 py-1.5 text-xs text-vault-text placeholder:text-vault-muted/50 outline-none focus:border-vault-primary transition-colors"
           />
           <datalist id={`group-suggestions-${item.id}`}>
-            {existingGroups.map((g) => <option key={g} value={g} />)}
+            {groups.map((g) => <option key={g.id} value={g.name} />)}
           </datalist>
           <Button size="sm" onClick={saveGroup} loading={savingGroup}>Save</Button>
         </div>
       ) : (
-        item.category && (
-          <button
-            onClick={startEditingGroup}
-            className="self-start px-2 py-0.5 rounded-full text-[10px] font-medium bg-vault-primary/10 text-vault-primary hover:bg-vault-primary/20 transition-colors -mt-2"
-          >
-            {item.category}
-          </button>
-        )
+        <button
+          onClick={startEditingGroup}
+          disabled={readOnly}
+          className={clsx(
+            'self-start px-2 py-0.5 rounded-full text-[10px] font-medium transition-colors -mt-2',
+            item.category
+              ? 'bg-vault-primary/10 text-vault-primary hover:bg-vault-primary/20'
+              : 'bg-vault-elevated text-vault-muted hover:text-vault-text border border-dashed border-vault-border',
+          )}
+        >
+          {item.category || (readOnly ? 'No group' : '+ Add to group')}
+        </button>
       )}
 
       {/* Fields preview */}

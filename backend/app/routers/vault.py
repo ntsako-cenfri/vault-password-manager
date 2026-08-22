@@ -8,6 +8,7 @@ from app.schemas.grant import GrantedItemOut
 from app.schemas.vault import CredentialFieldIn, VaultItemCreate, VaultItemOut, VaultItemUpdate
 from app.services.audit_service import AuditService
 from app.services.encryption_service import EncryptionService
+from app.services.group_service import GroupService
 from app.services.vault_service import VaultService
 from app.utils.dependencies import get_current_user
 
@@ -62,6 +63,9 @@ async def create_item(
 ):
     svc = _svc(db)
     item = await svc.create_item(body, current_user)
+    # Typing a brand-new group name directly on an item should still make it a
+    # "real" group (visible/reusable even before this call), not just text.
+    await GroupService(db).ensure_group(body.category, current_user)
     return _build_item_out(item, svc)
 
 
@@ -94,6 +98,7 @@ async def update_item(
 ):
     svc = _svc(db)
     item = await svc.update_item(item_id, body, current_user)
+    await GroupService(db).ensure_group(body.category, current_user)
     return _build_item_out(item, svc)
 
 
