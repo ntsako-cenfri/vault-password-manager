@@ -63,6 +63,7 @@ class VaultService:
             owner_id=user.id,
             title=data.title,
             description=data.description,
+            category=(data.category.strip() or None) if data.category is not None else None,
             item_key=item_key,
         )
         for field_data in data.fields:
@@ -79,6 +80,10 @@ class VaultService:
             item.title = data.title
         if data.description is not None:
             item.description = data.description
+        if data.category is not None:
+            # "" explicitly clears back to uncategorized ("Other" in the UI) —
+            # distinct from omitting the field, which leaves it untouched.
+            item.category = data.category.strip() or None
         return await self._repo.save(item)
 
     # ── Delete item ───────────────────────────────────────────────────────────

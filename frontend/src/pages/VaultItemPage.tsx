@@ -3,7 +3,7 @@
  * Supports creating a new item with all credential fields,
  * or editing an existing item (loads current data, handles file uploads).
  */
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
 import { ArrowLeft, Save, UserCheck, Clock, Trash2, Lock } from 'lucide-react'
@@ -29,15 +29,26 @@ export default function VaultItemPage() {
   const upsert = useVaultStore((s) => s.upsert)
   const upsertShared = useVaultStore((s) => s.upsertShared)
   const currentUser = useAuthStore((s) => s.user)
+  const allItems = useVaultStore((s) => s.items)
+  const fetchItems = useVaultStore((s) => s.fetch)
 
   const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
+  const [category, setCategory] = useState('')
   const [fields, setFields] = useState<CredentialFieldDraft[]>([])
   const [existingItem, setExistingItem] = useState<VaultItem | null>(null)
   const [loading, setLoading] = useState(!isNew)
   const [saving, setSaving] = useState(false)
   const [grants, setGrants] = useState<ItemGrant[]>([])
   const [preview, setPreview] = useState<{ filename: string; content: string; fieldId: string } | null>(null)
+
+  // Existing groups, for the datalist suggestions below — lets you pick a group
+  // that's already in use, or just type a new name to create one on the fly.
+  useEffect(() => { fetchItems() }, [fetchItems])
+  const categoryOptions = useMemo(
+    () => Array.from(new Set(allItems.map((i) => i.category).filter((c): c is string => !!c))).sort(),
+    [allItems]
+  )
 
   // Load existing item in edit mode
   useEffect(() => {
@@ -46,6 +57,7 @@ export default function VaultItemPage() {
       setExistingItem(data)
       setTitle(data.title)
       setDescription(data.description ?? '')
+      setCategory(data.category ?? '')
       // Only load non-file fields as editable drafts; file fields shown separately
       const textFields = data.fields.filter((f) => !FILE_FIELD_TYPES.includes(f.field_type))
       setFields(textFields.map((f) => ({
@@ -92,7 +104,7 @@ export default function VaultItemPage() {
           .filter((f) => !FILE_FIELD_TYPES.includes(f.field_type))
           .map((f) => ({ field_type: f.field_type, label: f.label, value: f.value, comment: f.comment, order: f.order }))
 
-        const { data } = await vaultApi.create(title, description || null, textFields)
+        const { data } = await vaultApi.create(title, description || null, textFields, category || null)
         item = data
 
         // Upload file fields
@@ -110,8 +122,11 @@ export default function VaultItemPage() {
         const fresh = await vaultApi.get(item.id)
         item = fresh.data
       } else {
-        // Update title/description
-        const { data } = await vaultApi.update(id!, { title, description: description || undefined })
+        // Update title/description/category. category is always sent as a
+        // literal string (never omitted) so an empty value explicitly clears
+        // it back to "Other" — unlike description, which can't currently be
+        // cleared once set (an existing quirk in this form, left as-is).
+        const { data } = await vaultApi.update(id!, { title, description: description || undefined, category })
         item = data
 
         // Upload any new file fields
@@ -246,6 +261,17 @@ export default function VaultItemPage() {
               onChange={(e) => setDescription(e.target.value)}
               rows={2}
             />
+            <Input
+              label="Group (optional)"
+              placeholder="e.g. SFTP, AOS Postgres — type a new name to create one"
+              value={category}
+              readOnly={isReadOnly}
+              onChange={(e) => setCategory(e.target.value)}
+              list="category-suggestions"
+            />
+            <datalist id="category-suggestions">
+              {categoryOptions.map((c) => <option key={c} value={c} />)}
+            </datalist>
           </div>
 
           {/* Credential fields */}

@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Plus, Search, LayoutGrid, Users } from 'lucide-react'
+import { Plus, Search, LayoutGrid, Users, ChevronDown, ChevronRight } from 'lucide-react'
 import { Layout } from '@/components/layout/Layout'
 import { VaultItemCard } from '@/components/vault/VaultItemCard'
 import { ShareModal } from '@/components/vault/ShareModal'
@@ -9,11 +9,33 @@ import { useVaultStore } from '@/store/vaultStore'
 import type { VaultItem } from '@/types'
 import { useNavigate } from 'react-router-dom'
 
+const UNGROUPED = 'Other'
+
+/** Groups by the item's own `category` field. Uncategorized items land in "Other". */
+function groupItems(items: VaultItem[]): Map<string, VaultItem[]> {
+  const groups = new Map<string, VaultItem[]>()
+  for (const item of items) {
+    const key = item.category?.trim() || UNGROUPED
+    const list = groups.get(key)
+    if (list) list.push(item)
+    else groups.set(key, [item])
+  }
+  // Named groups alphabetically first, "Other" always last.
+  return new Map(
+    [...groups.entries()].sort(([a], [b]) => {
+      if (a === UNGROUPED) return 1
+      if (b === UNGROUPED) return -1
+      return a.localeCompare(b)
+    })
+  )
+}
+
 export default function DashboardPage() {
   const navigate = useNavigate()
   const { items, loading, fetch, sharedItems, sharedLoading, fetchShared } = useVaultStore()
   const [search, setSearch] = useState('')
   const [shareTarget, setShareTarget] = useState<VaultItem | null>(null)
+  const [collapsed, setCollapsed] = useState<Record<string, boolean>>({})
 
   useEffect(() => {
     fetch()
@@ -35,12 +57,18 @@ export default function DashboardPage() {
   const q = search.toLowerCase()
   const filtered = items.filter((i) =>
     i.title.toLowerCase().includes(q) ||
-    i.description?.toLowerCase().includes(q)
+    i.description?.toLowerCase().includes(q) ||
+    i.category?.toLowerCase().includes(q)
   )
   const filteredShared = sharedItems.filter((gi) =>
     gi.item.title.toLowerCase().includes(q) ||
     gi.item.description?.toLowerCase().includes(q)
   )
+
+  const grouped = useMemo(() => groupItems(filtered), [filtered])
+
+  const toggleGroup = (key: string) =>
+    setCollapsed((prev) => ({ ...prev, [key]: !prev[key] }))
 
   return (
     <Layout>
@@ -89,15 +117,32 @@ export default function DashboardPage() {
         </motion.div>
       ) : (
         <>
-          {filtered.length > 0 && (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-              <AnimatePresence>
-                {filtered.map((item) => (
-                  <VaultItemCard key={item.id} item={item} onShare={setShareTarget} />
-                ))}
-              </AnimatePresence>
-            </div>
-          )}
+          {[...grouped.entries()].map(([groupName, groupItems]) => {
+            const isCollapsed = !!collapsed[groupName]
+            return (
+              <div key={groupName} className="mb-8">
+                <button
+                  onClick={() => toggleGroup(groupName)}
+                  className="flex items-center gap-2 mb-3 text-left"
+                >
+                  {isCollapsed ? <ChevronRight size={14} /> : <ChevronDown size={14} />}
+                  <h2 className="text-sm font-semibold text-vault-text">{groupName}</h2>
+                  <span className="text-xs text-vault-muted">
+                    {groupItems.length} item{groupItems.length !== 1 ? 's' : ''}
+                  </span>
+                </button>
+                {!isCollapsed && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <AnimatePresence>
+                      {groupItems.map((item) => (
+                        <VaultItemCard key={item.id} item={item} onShare={setShareTarget} />
+                      ))}
+                    </AnimatePresence>
+                  </div>
+                )}
+              </div>
+            )
+          })}
           {search && filtered.length === 0 && filteredShared.length === 0 && (
             <p className="text-vault-muted text-sm text-center py-10">No items match your search</p>
           )}

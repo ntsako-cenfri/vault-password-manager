@@ -15,6 +15,9 @@ class VaultItem(Base):
     owner_id = Column(GUID, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     title = Column(String, nullable=False)
     description = Column(Text)
+    # Freeform grouping label shown as a section header in the UI (e.g. "SFTP",
+    # "AOS Postgres"). Nullable — ungrouped items show under "Other" client-side.
+    category = Column(String, nullable=True, index=True)
     # Per-item AES key, wrapped (encrypted) with the master key
     item_key = Column(Text, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)

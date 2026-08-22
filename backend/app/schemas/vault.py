@@ -28,12 +28,15 @@ class CredentialFieldOut(BaseModel):
 class VaultItemCreate(BaseModel):
     title: str
     description: Optional[str] = None
+    category: Optional[str] = None
     fields: list[CredentialFieldIn] = []
 
 
 class VaultItemUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
+    # None = leave unchanged; "" = clear back to uncategorized ("Other" in the UI).
+    category: Optional[str] = None
 
 
 class VaultItemOut(BaseModel):
@@ -41,6 +44,7 @@ class VaultItemOut(BaseModel):
     owner_id: UUID
     title: str
     description: Optional[str] = None
+    category: Optional[str] = None
     fields: list[CredentialFieldOut] = []
     created_at: datetime
     updated_at: datetime

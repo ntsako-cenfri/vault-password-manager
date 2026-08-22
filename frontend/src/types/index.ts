@@ -136,6 +136,8 @@ export interface VaultItem {
   owner_id: string
   title: string
   description: string | null
+  /** Freeform group label shown as a section header on the dashboard. */
+  category?: string | null
   fields: CredentialField[]
   created_at: string
   updated_at: string

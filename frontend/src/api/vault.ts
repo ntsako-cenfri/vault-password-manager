@@ -6,10 +6,10 @@ export const vaultApi = {
 
   get: (id: string) => api.get<VaultItem>(`/vault/${id}`),
 
-  create: (title: string, description: string | null, fields: object[]) =>
-    api.post<VaultItem>('/vault', { title, description, fields }),
+  create: (title: string, description: string | null, fields: object[], category?: string | null) =>
+    api.post<VaultItem>('/vault', { title, description, category: category || null, fields }),
 
-  update: (id: string, data: { title?: string; description?: string }) =>
+  update: (id: string, data: { title?: string; description?: string; category?: string }) =>
     api.patch<VaultItem>(`/vault/${id}`, data),
 
   delete: (id: string) => api.delete(`/vault/${id}`),
