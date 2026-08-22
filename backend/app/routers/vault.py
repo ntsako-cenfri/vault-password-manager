@@ -196,6 +196,7 @@ def _build_item_out(item, svc: VaultService) -> VaultItemOut:
         owner_id=item.owner_id,
         title=item.title,
         description=item.description,
+        category=item.category,
         created_at=item.created_at,
         updated_at=item.updated_at,
         fields=[CredentialFieldOut(**f) for f in decrypted],
