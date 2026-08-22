@@ -1,4 +1,3 @@
-import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ShieldOff, Clock } from 'lucide-react'
 import { Button } from '@/components/ui/Button'

@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Eye, EyeOff, Share2, Trash2, Clock, User as UserIcon, Copy } from 'lucide-react'
+import { Eye, EyeOff, Share2, Trash2, Clock, User as UserIcon, Copy, FolderInput } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { clsx } from 'clsx'
 import { vaultApi } from '@/api/vault'
 import { useVaultStore } from '@/store/vaultStore'
 import { Button } from '@/components/ui/Button'
 import { FIELD_TYPE_LABELS, FILE_FIELD_TYPES, SENSITIVE_FIELD_TYPES } from '@/types'
+import { groupNames } from '@/utils/groups'
 import type { VaultItem } from '@/types'
 
 interface Props {
@@ -19,9 +20,12 @@ interface Props {
 
 export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Props) {
   const navigate = useNavigate()
-  const removeFromStore = useVaultStore((s) => s.remove)
+  const { items, remove: removeFromStore, upsert } = useVaultStore()
   const [revealed, setRevealed] = useState<Record<string, boolean>>({})
   const [deleting, setDeleting] = useState(false)
+  const [editingGroup, setEditingGroup] = useState(false)
+  const [groupDraft, setGroupDraft] = useState(item.category ?? '')
+  const [savingGroup, setSavingGroup] = useState(false)
 
   const toggle = (id: string) => setRevealed((r) => ({ ...r, [id]: !r[id] }))
 
@@ -39,7 +43,28 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
     }
   }
 
+  const startEditingGroup = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    setGroupDraft(item.category ?? '')
+    setEditingGroup(true)
+  }
+
+  const saveGroup = async () => {
+    setSavingGroup(true)
+    try {
+      const { data } = await vaultApi.update(item.id, { category: groupDraft })
+      upsert(data)
+      toast.success(data.category ? `Moved to "${data.category}"` : 'Removed from group')
+    } catch {
+      toast.error('Could not update group')
+    } finally {
+      setSavingGroup(false)
+      setEditingGroup(false)
+    }
+  }
+
   const isSensitive = (ft: string) => SENSITIVE_FIELD_TYPES.includes(ft as any)
+  const existingGroups = groupNames(items).filter((g) => g !== 'Other')
 
   return (
     <motion.div
@@ -66,6 +91,9 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
         </div>
         {!readOnly && (
           <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+            <Button variant="ghost" size="sm" onClick={startEditingGroup} title="Move to group">
+              <FolderInput size={14} />
+            </Button>
             {onShare && (
               <Button variant="ghost" size="sm" onClick={() => onShare(item)} title="Share">
                 <Share2 size={14} />
@@ -77,6 +105,34 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
           </div>
         )}
       </div>
+
+      {/* Group badge / inline editor */}
+      {!readOnly && editingGroup ? (
+        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+          <input
+            autoFocus
+            list={`group-suggestions-${item.id}`}
+            value={groupDraft}
+            onChange={(e) => setGroupDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') saveGroup(); if (e.key === 'Escape') setEditingGroup(false) }}
+            placeholder="Group — pick one or type a new name"
+            className="flex-1 bg-vault-elevated border border-vault-border rounded-lg px-2.5 py-1.5 text-xs text-vault-text placeholder:text-vault-muted/50 outline-none focus:border-vault-primary transition-colors"
+          />
+          <datalist id={`group-suggestions-${item.id}`}>
+            {existingGroups.map((g) => <option key={g} value={g} />)}
+          </datalist>
+          <Button size="sm" onClick={saveGroup} loading={savingGroup}>Save</Button>
+        </div>
+      ) : (
+        item.category && (
+          <button
+            onClick={startEditingGroup}
+            className="self-start px-2 py-0.5 rounded-full text-[10px] font-medium bg-vault-primary/10 text-vault-primary hover:bg-vault-primary/20 transition-colors -mt-2"
+          >
+            {item.category}
+          </button>
+        )
+      )}
 
       {/* Fields preview */}
       {item.fields.length > 0 && (
