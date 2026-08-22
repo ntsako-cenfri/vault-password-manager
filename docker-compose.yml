@@ -1,67 +1,122 @@
-version: "3.9"
+name: password_manager
+
+# ── Docker secrets ────────────────────────────────────────────────────────────
+# Each secret is a file on the host (./secrets/*.txt, gitignored) mounted at
+# /run/secrets/<name> ONLY into the services that declare it. Secrets never enter
+# a container's environment block, so they can't leak via `docker inspect`.
+secrets:
+  postgres_password:        # DB superuser/admin (migrations + provisioning only)
+    file: ./secrets/postgres_password.txt
+  app_db_password:          # least-privilege app role (vault_app)
+    file: ./secrets/app_db_password.txt
+  jwt_secret_key:           # JWT signing key
+    file: ./secrets/jwt_secret_key.txt
+  master_encryption_key:    # wraps per-item AES keys — NEVER rotate (breaks data)
+    file: ./secrets/master_encryption_key.txt
 
 services:
-  # ── PostgreSQL ─────────────────────────────────────────────────────────────
+  # ── PostgreSQL ──────────────────────────────────────────────────────────────
   db:
-    image: postgres:16-alpine
+    image: postgres:16-alpine@sha256:16bc17c64a573ef34162af9298258d1aec548232985b33ed7b1eac33ba35c229
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: vault_user
+      POSTGRES_DB: password_manager
+      POSTGRES_PASSWORD_FILE: /run/secrets/postgres_password
+      # Consumed by the init script to provision the least-privilege app role.
+      APP_DB_USER: vault_app
+      APP_DB_PASSWORD_FILE: /run/secrets/app_db_password
+    secrets:
+      - postgres_password
+      - app_db_password
     volumes:
       - pg_data:/var/lib/postgresql/data
+      - ./db/init:/docker-entrypoint-initdb.d:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      test: ["CMD-SHELL", "pg_isready -U vault_user -d password_manager"]
       interval: 5s
       timeout: 5s
       retries: 10
-    networks:
-      - vault_net
+    # DB engines need CHOWN/SETUID during init — don't cap_drop ALL; contain otherwise.
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 512m
+    cpus: 1.0
+    networks: [vault_net]
 
-  # ── Backend (FastAPI) ───────────────────────────────────────────────────────
+  # ── Backend (FastAPI) ─────────────────────────────────────────────────────────
   backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: ${DATABASE_URL}
-      SECRET_KEY: ${SECRET_KEY}
-      MASTER_ENCRYPTION_KEY: ${MASTER_ENCRYPTION_KEY}
-      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES}
-      REFRESH_TOKEN_EXPIRE_DAYS: ${REFRESH_TOKEN_EXPIRE_DAYS}
-      UPLOAD_DIR: ${UPLOAD_DIR}
-      MAX_FILE_SIZE_MB: ${MAX_FILE_SIZE_MB}
-      ENVIRONMENT: ${ENVIRONMENT}
-      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      ENVIRONMENT: production
+      # Non-secret DB connection parts; password arrives via DB_PASSWORD_FILE.
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: password_manager
+      DB_USER: vault_app
+      DB_PASSWORD_FILE: /run/secrets/app_db_password
+      SECRET_KEY_FILE: /run/secrets/jwt_secret_key
+      MASTER_ENCRYPTION_KEY_FILE: /run/secrets/master_encryption_key
+      ACCESS_TOKEN_EXPIRE_MINUTES: "${ACCESS_TOKEN_EXPIRE_MINUTES:-30}"
+      REFRESH_TOKEN_EXPIRE_DAYS: "${REFRESH_TOKEN_EXPIRE_DAYS:-7}"
+      UPLOAD_DIR: /app/uploads
+      MAX_FILE_SIZE_MB: "${MAX_FILE_SIZE_MB:-50}"
+      ALLOWED_ORIGINS: "${ALLOWED_ORIGINS}"
+    secrets:
+      - app_db_password
+      - jwt_secret_key
+      - master_encryption_key
     volumes:
       - uploads:/app/uploads
     depends_on:
       db:
         condition: service_healthy
-    networks:
-      - vault_net
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    read_only: true
+    tmpfs:
+      - /tmp:noexec,nosuid,size=64m
+    mem_limit: 512m
+    cpus: 1.0
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://localhost:8000/api/health',timeout=5).status==200 else 1)\""]
+      interval: 15s
+      timeout: 6s
+      retries: 5
+      start_period: 25s
+    networks: [vault_net]
 
-  # ── Frontend (React/Vite) ───────────────────────────────────────────────────
+  # ── Frontend (React/Vite → nginx) ─────────────────────────────────────────────
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     restart: unless-stopped
-    networks:
-      - vault_net
+    security_opt: ["no-new-privileges:true"]
+    # nginx master must setuid workers + bind :80; drop everything else.
+    cap_drop: ["ALL"]
+    cap_add: ["CHOWN", "SETUID", "SETGID", "NET_BIND_SERVICE", "DAC_OVERRIDE"]
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=16m
+      - /var/run:size=4m
+      - /tmp:size=8m
+    mem_limit: 128m
+    cpus: 0.5
+    networks: [vault_net]
 
-  # ── Caddy (auto-HTTPS reverse proxy) ────────────────────────────────────────
+  # ── Caddy (auto-HTTPS reverse proxy — the only internet-facing service) ────────
   caddy:
-    image: caddy:2-alpine
+    image: caddy:2-alpine@sha256:77c07d5ebfa5be9fd6c820d2094ae662c9e7eeb9bf98346b7f639900263ee2a2
     restart: unless-stopped
     ports:
       - "80:80"
       - "443:443"
       - "443:443/udp"   # HTTP/3
     environment:
-      APP_DOMAIN: ${APP_DOMAIN}
+      APP_DOMAIN: "${APP_DOMAIN}"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - ./certs:/certs:ro
@@ -70,8 +125,15 @@ services:
     depends_on:
       - backend
       - frontend
-    networks:
-      - vault_net
+    security_opt: ["no-new-privileges:true"]
+    cap_drop: ["ALL"]
+    cap_add: ["NET_BIND_SERVICE"]
+    read_only: true
+    tmpfs:
+      - /tmp:size=8m
+    mem_limit: 256m
+    cpus: 1.0
+    networks: [vault_net]
 
 volumes:
   pg_data:

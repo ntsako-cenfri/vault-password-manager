@@ -16,15 +16,20 @@ import app.models.revoked_token  # noqa: F401 – registers table with Base.meta
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Validate secrets are not defaults in production
+    # Fail closed: refuse to start in production without strong, file-backed secrets.
     if settings.environment == "production":
-        assert settings.secret_key != "change_me_in_production", \
+        assert settings.secret_key not in ("", "change_me_in_production"), \
             "SECRET_KEY must be set to a strong random value in production"
-        assert settings.master_encryption_key != "change_me_in_production", \
+        assert settings.master_encryption_key not in ("", "change_me_in_production"), \
             "MASTER_ENCRYPTION_KEY must be set to a strong random value in production"
-    # Auto-create tables on startup (Alembic handles prod migrations)
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        assert settings.db_password != "", \
+            "DB_PASSWORD must be provided (Docker secret) in production"
+        # Prod schema is owned by the admin role and managed via Alembic; the
+        # least-privilege app role intentionally has no DDL rights.
+    else:
+        # Dev convenience only — auto-create tables.
+        async with engine.begin() as conn:
+            await conn.run_sync(Base.metadata.create_all)
     yield
 
 

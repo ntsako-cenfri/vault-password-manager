@@ -1,12 +1,17 @@
 {
     admin off
+    default_sni {$APP_DOMAIN}
 }
 
-# ── HTTP (local network) ───────────────────────────────────────────────────
-http://{$APP_DOMAIN:192.168.3.50} {
+# ── HTTPS (self-signed internal TLS) ──────────────────────────────────────
+https://{$APP_DOMAIN} {
+
+    tls /certs/cert.pem /certs/key.pem
 
     # ── Security headers ───────────────────────────────────────────────────
     header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        Content-Security-Policy   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'"
         X-Content-Type-Options   "nosniff"
         X-Frame-Options          "DENY"
         X-XSS-Protection         "1; mode=block"
@@ -26,6 +31,15 @@ http://{$APP_DOMAIN:192.168.3.50} {
         }
     }
 
+    # ── Server Status Report ───────────────────────────────────────────────
+    handle /server-report {
+        redir /server-report/ 301
+    }
+    handle /server-report/* {
+        uri strip_prefix /server-report
+        reverse_proxy 172.22.0.1:8888
+    }
+
     # ── SPA → nginx frontend container ────────────────────────────────────
     handle {
         reverse_proxy frontend:80
@@ -37,5 +51,21 @@ http://{$APP_DOMAIN:192.168.3.50} {
             roll_size 10mb
             roll_keep 5
         }
+    }
+
+}
+
+# Internal IP access
+https://10.10.108.68 {
+    tls /certs/cert.pem /certs/key.pem
+    handle /server-report {
+        redir /server-report/ 301
+    }
+    handle /server-report/* {
+        uri strip_prefix /server-report
+        reverse_proxy 172.22.0.1:8888
+    }
+    handle {
+        reverse_proxy frontend:80
     }
 }
