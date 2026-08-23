@@ -1,4 +1,5 @@
 from datetime import datetime
+from uuid import UUID
 
 from pydantic import BaseModel
 
@@ -8,7 +9,7 @@ class GroupCreate(BaseModel):
 
 
 class GroupOut(BaseModel):
-    id: str
+    id: UUID
     name: str
     created_at: datetime
 
