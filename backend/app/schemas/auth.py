@@ -48,6 +48,8 @@ class TokenResponse(BaseModel):
     token_type: str = "bearer"
     mfa_required: bool = False
     mfa_token: str | None = None
+    password_change_required: bool = False
+    password_change_token: str | None = None
 
 
 class RefreshRequest(BaseModel):
@@ -74,6 +76,22 @@ class TotpVerifyLoginRequest(BaseModel):
 
 class PasswordResetRequest(BaseModel):
     current_password: str
+    new_password: str
+
+    @field_validator("new_password")
+    @classmethod
+    def password_strength(cls, v: str) -> str:
+        if len(v) < 10:
+            raise ValueError("Password must be at least 10 characters")
+        if not re.search(r"[A-Z]", v):
+            raise ValueError("Password must contain an uppercase letter")
+        if not re.search(r"\d", v):
+            raise ValueError("Password must contain a digit")
+        return v
+
+
+class CompletePasswordChangeRequest(BaseModel):
+    password_change_token: str
     new_password: str
 
     @field_validator("new_password")

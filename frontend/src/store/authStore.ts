@@ -2,12 +2,18 @@ import { create } from 'zustand'
 import { authApi } from '@/api/auth'
 import type { User } from '@/types'
 
+type LoginResult =
+  | { mfa_required: true; mfa_token: string }
+  | { password_change_required: true; password_change_token: string }
+  | void
+
 interface AuthState {
   user: User | null
   loading: boolean
   hydrate: () => Promise<void>
-  login: (email: string, password: string) => Promise<{ mfa_required: true; mfa_token: string } | void>
+  login: (email: string, password: string) => Promise<LoginResult>
   verifyMfa: (mfa_token: string, code: string) => Promise<void>
+  completePasswordChange: (password_change_token: string, new_password: string) => Promise<void>
   logout: () => void
 }
 
@@ -30,6 +36,9 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   login: async (email, password) => {
     const { data } = await authApi.login(email, password)
+    if (data.password_change_required && data.password_change_token) {
+      return { password_change_required: true, password_change_token: data.password_change_token }
+    }
     if (data.mfa_required && data.mfa_token) {
       return { mfa_required: true, mfa_token: data.mfa_token }
     }
@@ -47,10 +56,17 @@ export const useAuthStore = create<AuthState>((set) => ({
     set({ user: me.data })
   },
 
+  completePasswordChange: async (password_change_token, new_password) => {
+    const { data } = await authApi.completePasswordChange(password_change_token, new_password)
+    localStorage.setItem('access_token', data.access_token)
+    localStorage.setItem('refresh_token', data.refresh_token)
+    const me = await authApi.me()
+    set({ user: me.data })
+  },
+
   logout: () => {
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
     set({ user: null })
   },
 }))
-

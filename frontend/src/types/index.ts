@@ -18,6 +18,8 @@ export interface TokenResponse {
   token_type: string
   mfa_required?: boolean
   mfa_token?: string
+  password_change_required?: boolean
+  password_change_token?: string
 }
 
 // ── Credential fields ─────────────────────────────────────────────────────────

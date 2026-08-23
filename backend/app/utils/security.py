@@ -97,3 +97,29 @@ def decode_mfa_token(token: str) -> str:
     if payload.get("type") != "mfa_challenge":
         raise JWTError("Not an MFA challenge token")
     return payload["sub"]
+
+
+PASSWORD_CHANGE_TOKEN_EXPIRE_MINUTES = 15
+
+
+def create_password_change_token(user_id: str) -> str:
+    """Short-lived token issued after password check when must_change_password is
+    set — exchanged for full tokens once a new password is submitted. Deliberately
+    cannot be used for anything else (wrong type = rejected everywhere else)."""
+    now = datetime.now(timezone.utc)
+    payload = {
+        "sub": user_id,
+        "type": "password_change_required",
+        "jti": str(uuid.uuid4()),
+        "iat": now,
+        "exp": now + timedelta(minutes=PASSWORD_CHANGE_TOKEN_EXPIRE_MINUTES),
+    }
+    return jwt.encode(payload, settings.secret_key, algorithm=ALGORITHM)
+
+
+def decode_password_change_token(token: str) -> str:
+    """Decode a password-change token and return user_id. Raise JWTError on failure."""
+    payload = jwt.decode(token, settings.secret_key, algorithms=[ALGORITHM])
+    if payload.get("type") != "password_change_required":
+        raise JWTError("Not a password-change token")
+    return payload["sub"]

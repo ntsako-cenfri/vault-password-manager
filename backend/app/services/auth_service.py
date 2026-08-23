@@ -14,8 +14,10 @@ from app.services.audit_service import AuditService
 from app.utils.security import (
     create_access_token,
     create_mfa_token,
+    create_password_change_token,
     create_refresh_token,
     decode_mfa_token,
+    decode_password_change_token,
     decode_token,
     hash_password,
     verify_password,
@@ -90,6 +92,16 @@ class AuthService:
             actor_email=user.email,
             ip_address=ip,
         )
+        # A rotated/one-time password takes priority over 2FA — there's no point
+        # asking for a TOTP code before they've even set a real password yet.
+        if user.must_change_password:
+            return {
+                "password_change_required": True,
+                "password_change_token": create_password_change_token(str(user.id)),
+                "access_token": "",
+                "refresh_token": "",
+                "token_type": "bearer",
+            }
         if user.totp_enabled:
             return {
                 "mfa_required": True,
@@ -98,6 +110,26 @@ class AuthService:
                 "refresh_token": "",
                 "token_type": "bearer",
             }
+        return self._issue_tokens(user)
+
+    # ── Forced password change (one-time / rotated login) ───────────────────────
+
+    async def complete_forced_password_change(self, token: str, new_password: str) -> dict:
+        """Exchange a valid password-change token + a new password for full tokens.
+        Logs the user straight in afterward — no separate second login needed."""
+        try:
+            user_id = decode_password_change_token(token)
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid or expired session")
+        user = await self._repo.get_by_id(user_id)
+        if not user or not user.is_active:
+            raise HTTPException(status_code=401, detail="User not found")
+        user.hashed_password = hash_password(new_password)
+        user.must_change_password = False
+        await self._repo.save(user)
+        await self._audit.log(
+            "auth.forced_password_change", actor_id=str(user.id), actor_email=user.email
+        )
         return self._issue_tokens(user)
 
     # ── TOTP 2FA ──────────────────────────────────────────────────────────────

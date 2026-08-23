@@ -8,6 +8,7 @@ from app.repositories.grant_repository import GrantRepository
 from jose import JWTError
 
 from app.schemas.auth import (
+    CompletePasswordChangeRequest,
     LoginRequest,
     PasswordResetRequest,
     RefreshRequest,
@@ -67,6 +68,17 @@ async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends
     svc = AuthService(db)
     ip = request.client.host if request.client else None
     return await svc.login(body, ip=ip)
+
+
+@router.post("/complete-password-change", response_model=TokenResponse)
+@limiter.limit("10/minute")
+async def complete_password_change(
+    request: Request, body: CompletePasswordChangeRequest, db: AsyncSession = Depends(get_db)
+):
+    """Exchange a password-change token (issued by /login when must_change_password
+    is set) plus a new password for full access/refresh tokens."""
+    svc = AuthService(db)
+    return await svc.complete_forced_password_change(body.password_change_token, body.new_password)
 
 
 @router.post("/refresh", response_model=TokenResponse)

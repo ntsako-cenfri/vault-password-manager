@@ -18,6 +18,9 @@ export const authApi = {
   login: (email: string, password: string) =>
     api.post<TokenResponse>('/auth/login', { email, password }),
 
+  completePasswordChange: (password_change_token: string, new_password: string) =>
+    api.post<TokenResponse>('/auth/complete-password-change', { password_change_token, new_password }),
+
   me: () => api.get<User>('/auth/me'),
 
   resetPassword: (current_password: string, new_password: string) =>

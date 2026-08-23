@@ -26,6 +26,10 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     totp_secret = Column(String, nullable=True)
     totp_enabled = Column(Boolean, default=False, nullable=False)
+    # Set on a password rotation done on the user's behalf (e.g. a mass reset) —
+    # forces them through the one-time change-password flow on next login,
+    # instead of just handing them a working permanent password blind.
+    must_change_password = Column(Boolean, default=False, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
