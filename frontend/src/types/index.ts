@@ -181,6 +181,7 @@ export interface ItemGrant {
 
 export interface GrantedItem {
   grant_id: string
+  granted_by: string
   granted_by_username: string
   item: VaultItem
 }

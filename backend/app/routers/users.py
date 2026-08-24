@@ -88,6 +88,7 @@ async def get_user_vault(
         shared_items=[
             GrantedItemOut(
                 grant_id=g.id,
+                granted_by=g.granted_by,
                 granted_by_username=g.grantor.username if g.grantor else "?",
                 item=_build(item),
             )

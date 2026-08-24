@@ -26,6 +26,7 @@ class ItemGrantOut(BaseModel):
 
 class GrantedItemOut(BaseModel):
     grant_id: UUID
+    granted_by: UUID
     granted_by_username: str
     item: VaultItemOut
 

@@ -19,8 +19,15 @@ class GrantService:
         item = await self._vault_repo.get_by_id(item_id)
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
-        if str(item.owner_id) != str(requester.id) and requester.role != UserRole.admin:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only the item owner can grant access")
+        is_owner_or_admin = str(item.owner_id) == str(requester.id) or requester.role == UserRole.admin
+        if not is_owner_or_admin:
+            # Not the owner/admin — but anyone an item has been shared *to* may
+            # reshare it onward to someone else. They still can't revoke other
+            # people's access or the owner's original grant (see revoke_grant
+            # below), this only lets access spread further, not be taken away.
+            has_grant = await self._grant_repo.has_grant(item_id, str(requester.id))
+            if not has_grant:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You don't have access to this item")
         # Prevent granting to self
         existing_owner = await self._user_repo.get_by_email(email)
         if existing_owner and str(existing_owner.id) == str(item.owner_id):
@@ -47,17 +54,25 @@ class GrantService:
         item = await self._vault_repo.get_by_id(item_id)
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
-        if str(item.owner_id) != str(requester.id) and requester.role != UserRole.admin:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        is_owner_or_admin = str(item.owner_id) == str(requester.id) or requester.role == UserRole.admin
+        if not is_owner_or_admin:
+            has_grant = await self._grant_repo.has_grant(item_id, str(requester.id))
+            if not has_grant:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return await self._grant_repo.list_by_item(item_id)
 
     async def revoke_grant(self, item_id: str, grant_id: str, requester: User) -> None:
         item = await self._vault_repo.get_by_id(item_id)
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
-        if str(item.owner_id) != str(requester.id) and requester.role != UserRole.admin:
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         grant = await self._grant_repo.get_by_id(grant_id)
         if not grant or str(grant.vault_item_id) != item_id:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Grant not found")
+        is_owner_or_admin = str(item.owner_id) == str(requester.id) or requester.role == UserRole.admin
+        # A resharer may undo a grant *they* personally created, but not the
+        # owner's original grants or anyone else's reshares — only the owner
+        # or an admin can revoke those.
+        is_own_reshare = str(grant.granted_by) == str(requester.id)
+        if not is_owner_or_admin and not is_own_reshare:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         await self._grant_repo.delete(grant)

@@ -253,42 +253,65 @@ export default function AdminPage() {
                       )}
                     </section>
 
-                    {/* Shared with this user */}
-                    <section>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Users size={13} className="text-vault-accent" />
-                        <h3 className="text-xs font-semibold text-vault-muted uppercase tracking-wider">
-                          Shared With Them ({vaultData.shared_items.length})
-                        </h3>
-                      </div>
-                      {vaultData.shared_items.length === 0 ? (
-                        <p className="text-xs text-vault-muted text-center py-4">Nothing shared with this user</p>
-                      ) : (
-                        <div className="flex flex-col gap-2">
-                          {vaultData.shared_items.map((gi) => (
-                            <div
-                              key={gi.grant_id}
-                              className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-vault-border bg-vault-elevated"
-                            >
-                              <div className="flex-1 min-w-0">
-                                <p className="text-sm font-medium text-vault-text truncate">{gi.item.title}</p>
-                                <p className="text-[10px] text-vault-muted">
-                                  Shared by {gi.granted_by_username} · {gi.item.fields.length} field{gi.item.fields.length !== 1 ? 's' : ''}
-                                </p>
-                              </div>
-                              <Button
-                                variant="danger"
-                                size="sm"
-                                onClick={() => handleRevokeGrant(gi)}
-                                title="Revoke access"
-                              >
-                                <Trash2 size={12} />
-                              </Button>
-                            </div>
-                          ))}
+                    {/* Shared with this user — split so it directly answers
+                        "what am I sharing to them" instead of burying it in
+                        everyone else's shares too. */}
+                    {(() => {
+                      const sharedByYou = vaultData.shared_items.filter((gi) => gi.granted_by === currentUser?.id)
+                      const sharedByOthers = vaultData.shared_items.filter((gi) => gi.granted_by !== currentUser?.id)
+                      const renderGrant = (gi: typeof vaultData.shared_items[0]) => (
+                        <div
+                          key={gi.grant_id}
+                          className="flex items-center gap-3 px-3 py-2.5 rounded-xl border border-vault-border bg-vault-elevated"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-vault-text truncate">{gi.item.title}</p>
+                            <p className="text-[10px] text-vault-muted">
+                              Shared by {gi.granted_by_username} · {gi.item.fields.length} field{gi.item.fields.length !== 1 ? 's' : ''}
+                            </p>
+                          </div>
+                          <Button
+                            variant="danger"
+                            size="sm"
+                            onClick={() => handleRevokeGrant(gi)}
+                            title="Revoke access"
+                          >
+                            <Trash2 size={12} />
+                          </Button>
                         </div>
-                      )}
-                    </section>
+                      )
+                      return (
+                        <>
+                          <section>
+                            <div className="flex items-center gap-2 mb-3">
+                              <Users size={13} className="text-vault-primary" />
+                              <h3 className="text-xs font-semibold text-vault-muted uppercase tracking-wider">
+                                Shared By You ({sharedByYou.length})
+                              </h3>
+                            </div>
+                            {sharedByYou.length === 0 ? (
+                              <p className="text-xs text-vault-muted text-center py-4">You haven't shared anything with this user</p>
+                            ) : (
+                              <div className="flex flex-col gap-2">{sharedByYou.map(renderGrant)}</div>
+                            )}
+                          </section>
+
+                          <section>
+                            <div className="flex items-center gap-2 mb-3">
+                              <Users size={13} className="text-vault-accent" />
+                              <h3 className="text-xs font-semibold text-vault-muted uppercase tracking-wider">
+                                Shared By Others ({sharedByOthers.length})
+                              </h3>
+                            </div>
+                            {sharedByOthers.length === 0 ? (
+                              <p className="text-xs text-vault-muted text-center py-4">Nothing shared by anyone else</p>
+                            ) : (
+                              <div className="flex flex-col gap-2">{sharedByOthers.map(renderGrant)}</div>
+                            )}
+                          </section>
+                        </>
+                      )
+                    })()}
                   </>
                 ) : null}
               </div>

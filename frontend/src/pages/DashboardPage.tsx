@@ -176,6 +176,7 @@ export default function DashboardPage() {
                     item={gi.item}
                     readOnly
                     sharedBy={gi.granted_by_username}
+                    onShare={setShareTarget}
                   />
                 ))}
               </AnimatePresence>

@@ -78,7 +78,7 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
       <div className="flex items-start justify-between gap-2">
         <div className="flex-1 min-w-0">
           <h3
-            className="font-semibold text-vault-text truncate cursor-pointer hover:text-vault-primary transition-colors"
+            className="text-lg font-bold text-vault-text truncate cursor-pointer hover:text-vault-primary transition-colors"
             onClick={() => navigate(`/vault/${item.id}`)}
           >
             {item.title}
@@ -90,21 +90,6 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
             <p className="text-[10px] text-vault-accent mt-0.5">Shared by {sharedBy}</p>
           )}
         </div>
-        {!readOnly && (
-          <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-            <Button variant="ghost" size="sm" onClick={startEditingGroup} title="Move to group">
-              <FolderInput size={14} />
-            </Button>
-            {onShare && (
-              <Button variant="ghost" size="sm" onClick={() => onShare(item)} title="Share">
-                <Share2 size={14} />
-              </Button>
-            )}
-            <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting} title="Delete">
-              <Trash2 size={14} />
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Group badge / inline editor — always visible, not hover-only, so it's
@@ -192,9 +177,31 @@ export function VaultItemCard({ item, onShare, readOnly = false, sharedBy }: Pro
       )}
 
       {/* Footer */}
-      <div className="flex items-center gap-3 text-[10px] text-vault-muted pt-1 border-t border-vault-border/60">
-        <span className="flex items-center gap-1"><Clock size={10} /> {new Date(item.updated_at).toLocaleDateString()}</span>
-        <span className="flex items-center gap-1"><UserIcon size={10} /> {item.fields.length} field{item.fields.length !== 1 ? 's' : ''}</span>
+      <div className="flex items-center justify-between gap-3 pt-1 border-t border-vault-border/60">
+        <div className="flex items-center gap-3 text-[10px] text-vault-muted">
+          <span className="flex items-center gap-1"><Clock size={10} /> {new Date(item.updated_at).toLocaleDateString()}</span>
+          <span className="flex items-center gap-1"><UserIcon size={10} /> {item.fields.length} field{item.fields.length !== 1 ? 's' : ''}</span>
+        </div>
+        <div className="flex items-center gap-1">
+          {!readOnly && (
+            <Button variant="ghost" size="sm" onClick={startEditingGroup} title="Move to group">
+              <FolderInput size={14} />
+            </Button>
+          )}
+          {onShare && (
+            // Reshare is available even on items shared *to* you (readOnly),
+            // not just ones you own — the backend allows any grantee to
+            // extend access further, they just can't edit or delete the item.
+            <Button variant="ghost" size="sm" onClick={() => onShare(item)} title="Share">
+              <Share2 size={14} />
+            </Button>
+          )}
+          {!readOnly && (
+            <Button variant="danger" size="sm" onClick={handleDelete} loading={deleting} title="Delete">
+              <Trash2 size={14} />
+            </Button>
+          )}
+        </div>
       </div>
     </motion.div>
   )

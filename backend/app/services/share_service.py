@@ -6,6 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.share_link import ShareLink
 from app.models.user import User, UserRole
+from app.repositories.grant_repository import GrantRepository
 from app.repositories.share_repository import ShareRepository
 from app.repositories.vault_repository import VaultRepository
 from app.schemas.share import ShareLinkCreate
@@ -16,6 +17,7 @@ from app.services.vault_service import VaultService
 class ShareService:
     def __init__(self, db: AsyncSession, enc: EncryptionService) -> None:
         self._share_repo = ShareRepository(db)
+        self._grant_repo = GrantRepository(db)
         self._vault_repo = VaultRepository(db)
         self._vault_svc = VaultService(db, enc)
 
@@ -28,8 +30,11 @@ class ShareService:
         item = await self._vault_repo.get_by_id(item_id)
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
-        if user.role != UserRole.admin and str(item.owner_id) != str(user.id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        is_owner_or_admin = user.role == UserRole.admin or str(item.owner_id) == str(user.id)
+        if not is_owner_or_admin:
+            has_grant = await self._grant_repo.has_grant(item_id, str(user.id))
+            if not has_grant:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
         return await self._share_repo.create(
             vault_item_id=item_id,
@@ -93,8 +98,11 @@ class ShareService:
         item = await self._vault_repo.get_by_id(item_id)
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
-        if user.role != UserRole.admin and str(item.owner_id) != str(user.id):
-            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        is_owner_or_admin = user.role == UserRole.admin or str(item.owner_id) == str(user.id)
+        if not is_owner_or_admin:
+            has_grant = await self._grant_repo.has_grant(item_id, str(user.id))
+            if not has_grant:
+                raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         return await self._share_repo.list_by_item(item_id)
 
     # ── Revoke ────────────────────────────────────────────────────────────────
@@ -112,6 +120,8 @@ class ShareService:
         item = await self._vault_repo.get_by_id(str(link.vault_item_id))
         if not item:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
-        if user.role != UserRole.admin and str(item.owner_id) != str(user.id):
+        is_owner_or_admin = user.role == UserRole.admin or str(item.owner_id) == str(user.id)
+        is_own_link = str(link.created_by) == str(user.id)
+        if not is_owner_or_admin and not is_own_link:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         await self._share_repo.delete(link)

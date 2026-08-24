@@ -6,7 +6,7 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Save, UserCheck, Clock, Trash2, Lock } from 'lucide-react'
+import { ArrowLeft, Save, UserCheck, Clock, Trash2, Lock, Share2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { vaultApi } from '@/api/vault'
 import { grantsApi } from '@/api/grants'
@@ -16,6 +16,7 @@ import { useAuthStore } from '@/store/authStore'
 import { Layout } from '@/components/layout/Layout'
 import { CredentialFieldEditor } from '@/components/vault/CredentialFieldEditor'
 import { FilePreviewModal } from '@/components/vault/FilePreviewModal'
+import { ShareModal } from '@/components/vault/ShareModal'
 import { Input, Textarea } from '@/components/ui/Input'
 import { Button } from '@/components/ui/Button'
 import { FILE_FIELD_TYPES } from '@/types'
@@ -41,6 +42,7 @@ export default function VaultItemPage() {
   const [saving, setSaving] = useState(false)
   const [grants, setGrants] = useState<ItemGrant[]>([])
   const [preview, setPreview] = useState<{ filename: string; content: string; fieldId: string } | null>(null)
+  const [showShare, setShowShare] = useState(false)
 
   // Existing groups, for the datalist suggestions below — lets you pick a group
   // that's already been created (even an empty one), or type a new name to
@@ -231,8 +233,18 @@ export default function VaultItemPage() {
             <ArrowLeft size={15} />
           </Button>
           <h1 className="text-lg font-bold">{isNew ? 'New Vault Item' : (isReadOnly ? 'View Item' : 'Edit Item')}</h1>
+          {!isNew && (
+            // Reshare is available even in read-only (shared-to-you) mode —
+            // the backend allows any existing grantee to extend access further.
+            <Button variant="ghost" size="sm" className="ml-auto" onClick={() => setShowShare(true)}>
+              <Share2 size={14} /> Share
+            </Button>
+          )}
           {isReadOnly && (
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-vault-muted bg-vault-elevated border border-vault-border px-2.5 py-1 rounded-lg">
+            // No ml-auto here — the Share button above always renders whenever
+            // this badge does (both require !isNew), so it already claims the
+            // auto-margin push; this just sits right after it.
+            <span className="flex items-center gap-1.5 text-xs text-vault-muted bg-vault-elevated border border-vault-border px-2.5 py-1 rounded-lg">
               <Lock size={11} /> View only
             </span>
           )}
@@ -340,6 +352,14 @@ export default function VaultItemPage() {
           filename={preview.filename}
           content={preview.content}
           onDownload={() => { handleDownload(preview.fieldId); setPreview(null) }}
+        />
+      )}
+
+      {existingItem && (
+        <ShareModal
+          item={existingItem}
+          open={showShare}
+          onClose={() => setShowShare(false)}
         />
       )}
     </>
