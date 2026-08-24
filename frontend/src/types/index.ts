@@ -35,6 +35,7 @@ export type FieldType =
   | 'oauth_token'
   // Database
   | 'db_host'
+  | 'db_name'
   | 'db_username'
   | 'db_port'
   | 'db_password'
@@ -69,6 +70,7 @@ export const FIELD_TYPE_LABELS: Record<FieldType, string> = {
   api_key:      'API Key',
   oauth_token:  'OAuth Token',
   db_host:      'DB Host',
+  db_name:      'DB Name',
   db_username:  'DB Username',
   db_port:      'DB Port',
   db_password:  'DB Password',
@@ -102,7 +104,7 @@ export const FILE_FIELD_TYPES: FieldType[] = ['pem_file', 'install_file', 'ssh_k
 export const FIELD_TYPE_GROUPS: { label: string; types: FieldType[] }[] = [
   { label: 'Basic',        types: ['username', 'password', 'totp', 'pin'] },
   { label: 'Web & API',    types: ['url', 'api_key', 'oauth_token'] },
-  { label: 'Database',     types: ['db_host', 'db_username', 'db_password', 'db_port'] },
+  { label: 'Database',     types: ['db_host', 'db_name', 'db_username', 'db_password', 'db_port'] },
   { label: 'Payment',      types: ['credit_card', 'card_expiry', 'card_cvv'] },
   { label: 'Banking',      types: ['bank_account', 'sort_code'] },
   { label: 'Contact',      types: ['email_address', 'phone'] },

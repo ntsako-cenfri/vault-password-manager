@@ -19,6 +19,7 @@ class FieldType(str, enum.Enum):
     note = "note"
     custom = "custom"
     db_host = "db_host"
+    db_name = "db_name"
     db_username = "db_username"
     db_port = "db_port"
     db_password = "db_password"
