@@ -49,6 +49,7 @@ async def list_shared_items(
     return [
         GrantedItemOut(
             grant_id=grant.id,
+            granted_by=grant.granted_by,
             granted_by_username=grant.grantor.username if grant.grantor else "?",
             item=_build_item_out(item, svc),
         )

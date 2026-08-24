@@ -150,8 +150,11 @@ export default function DashboardPage() {
         </>
       )}
 
-      {/* Shared with me */}
-      {!groupFilter && (sharedItems.length > 0 || sharedLoading) && (
+      {/* Shared with me -- intentionally NOT gated on groupFilter: shared
+          items don't participate in your own group filtering at all, so
+          hiding this whole section while browsing a group (e.g. "pgadmin")
+          made it look like most of your shared items had vanished. */}
+      {(sharedItems.length > 0 || sharedLoading) && (
         <div className="mt-2">
           <div className="flex items-center gap-2 mb-4">
             <div className="p-1.5 rounded-lg bg-vault-accent/10 text-vault-accent">
