@@ -29,4 +29,12 @@ class AuditService:
             ip_address=ip_address,
         )
         self._db.add(entry)
-        await self._db.flush()
+        # Commit immediately, independent of the caller's overall request
+        # transaction: audit entries must survive even when the action they
+        # describe fails and the outer get_db() dependency rolls everything
+        # else back on exception (e.g. auth.login_failed always raises an
+        # HTTPException right after logging). Safe because AsyncSessionLocal
+        # is expire_on_commit=False, so already-loaded attributes on other
+        # ORM objects in this session (e.g. the caller's `user`) stay usable
+        # without triggering a lazy-load after this commit.
+        await self._db.commit()

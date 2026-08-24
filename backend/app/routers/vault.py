@@ -10,6 +10,7 @@ from app.services.audit_service import AuditService
 from app.services.encryption_service import EncryptionService
 from app.services.group_service import GroupService
 from app.services.vault_service import VaultService
+from app.utils.http import get_client_ip
 from app.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/vault", tags=["vault"])
@@ -84,7 +85,7 @@ async def get_item(
         actor_email=current_user.email,
         resource_type="vault_item",
         resource_id=item_id,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     return _build_item_out(item, svc)
 
@@ -117,7 +118,7 @@ async def delete_item(
         actor_email=current_user.email,
         resource_type="vault_item",
         resource_id=item_id,
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
 
 
@@ -167,7 +168,7 @@ async def download_field(
         resource_type="credential_field",
         resource_id=field_id,
         detail=f"item={item_id}",
-        ip_address=request.client.host if request.client else None,
+        ip_address=get_client_ip(request),
     )
     safe = _safe_filename(filename)
     return Response(

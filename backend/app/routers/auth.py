@@ -23,6 +23,7 @@ from app.schemas.auth import (
 from app.utils.security import decode_invite_token
 from app.schemas.user import UserOut
 from app.services.auth_service import AuthService
+from app.utils.http import get_client_ip
 from app.utils.dependencies import get_current_user
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -66,7 +67,7 @@ async def register(body: RegisterRequest, db: AsyncSession = Depends(get_db)):
 @limiter.limit("10/minute")
 async def login(request: Request, body: LoginRequest, db: AsyncSession = Depends(get_db)):
     svc = AuthService(db)
-    ip = request.client.host if request.client else None
+    ip = get_client_ip(request)
     return await svc.login(body, ip=ip)
 
 
