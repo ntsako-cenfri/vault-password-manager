@@ -73,6 +73,14 @@ class GrantService:
         # owner's original grants or anyone else's reshares — only the owner
         # or an admin can revoke those.
         is_own_reshare = str(grant.granted_by) == str(requester.id)
-        if not is_owner_or_admin and not is_own_reshare:
+        # The grantee themself may always unshare — remove their own access —
+        # regardless of who created the grant. This is distinct from write
+        # access (see VaultService._assert_write_access): a grantee can never
+        # delete the underlying item, but they can always walk away from a
+        # share that was extended to them.
+        is_grantee_self_unshare = (
+            grant.granted_to_id is not None and str(grant.granted_to_id) == str(requester.id)
+        )
+        if not is_owner_or_admin and not is_own_reshare and not is_grantee_self_unshare:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         await self._grant_repo.delete(grant)

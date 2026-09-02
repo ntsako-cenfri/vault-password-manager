@@ -236,6 +236,55 @@ async def test_non_owner_cannot_revoke(client: AsyncClient):
     assert r.status_code == 403
 
 
+@pytest.mark.asyncio
+async def test_grantee_can_unshare_self(client: AsyncClient):
+    """A grantee can revoke their own grant (unshare themselves), even
+    though they were never the one who created it and cannot delete the
+    underlying item."""
+    token, item_id = await _setup(client)
+    await register_user(client, "karl@vault.io", "karl")
+    create_r = await client.post(
+        f"/api/shares/vault/{item_id}/grant",
+        json={"email": "karl@vault.io"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    grant_id = create_r.json()["id"]
+
+    karl_token = await login(client, "karl@vault.io", "UserPass1!")
+    r = await client.delete(
+        f"/api/shares/vault/{item_id}/grant/{grant_id}",
+        headers={"Authorization": f"Bearer {karl_token}"},
+    )
+    assert r.status_code == 204
+
+    # Confirm it is actually gone from the owner's grant list
+    list_r = await client.get(
+        f"/api/shares/vault/{item_id}/grants",
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert list_r.json() == []
+
+
+@pytest.mark.asyncio
+async def test_grantee_cannot_delete_item(client: AsyncClient):
+    """A grantee has read-only access — deleting the underlying item is
+    owner/admin only, regardless of any grant."""
+    token, item_id = await _setup(client)
+    await register_user(client, "leo@vault.io", "leo")
+    await client.post(
+        f"/api/shares/vault/{item_id}/grant",
+        json={"email": "leo@vault.io"},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+
+    leo_token = await login(client, "leo@vault.io", "UserPass1!")
+    r = await client.delete(
+        f"/api/vault/{item_id}",
+        headers={"Authorization": f"Bearer {leo_token}"},
+    )
+    assert r.status_code == 403
+
+
 # ── Shared vault endpoint ─────────────────────────────────────────────────────
 
 
