@@ -8,7 +8,13 @@ from app.models.audit_log import AuditLog
 from app.models.user import User
 from app.repositories.user_repository import UserRepository
 from app.schemas.grant import GrantedItemOut, UserVaultResponse
-from app.schemas.user import InviteOut, InviteRequest, RoleUpdateRequest, UserOut
+from app.schemas.user import (
+    AdminPasswordResetOut,
+    InviteOut,
+    InviteRequest,
+    RoleUpdateRequest,
+    UserOut,
+)
 from app.schemas.vault import VaultItemOut
 from app.services.encryption_service import EncryptionService
 from app.services.user_service import UserService
@@ -54,6 +60,17 @@ async def toggle_active(
 ):
     svc = UserService(db)
     return await svc.toggle_active(admin, user_id)
+
+
+@router.post("/{user_id}/reset-password", response_model=AdminPasswordResetOut)
+async def admin_reset_password(
+    user_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin only: issue a one-time password. The user must set their own on next login."""
+    svc = UserService(db)
+    return AdminPasswordResetOut(temporary_password=await svc.admin_reset_password(admin, user_id))
 
 
 @router.get("/{user_id}/vault", response_model=UserVaultResponse)

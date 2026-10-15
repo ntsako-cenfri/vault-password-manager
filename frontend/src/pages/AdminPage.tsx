@@ -1,13 +1,14 @@
 /** Admin panel — user management + vault inspection. */
 import { useEffect, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Shield, UserCheck, UserX, ChevronDown, Eye, Trash2, X, Folder, Users } from 'lucide-react'
+import { Shield, UserCheck, UserX, ChevronDown, Eye, Trash2, X, Folder, Users, KeyRound, Copy, Check } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { usersApi } from '@/api/users'
 import { grantsApi } from '@/api/grants'
 import { useAuthStore } from '@/store/authStore'
 import { Layout } from '@/components/layout/Layout'
 import { Button } from '@/components/ui/Button'
+import { Modal } from '@/components/ui/Modal'
 import type { User, UserRole, UserVaultResponse } from '@/types'
 import { clsx } from 'clsx'
 
@@ -24,6 +25,11 @@ export default function AdminPage() {
   const [vaultUser, setVaultUser] = useState<User | null>(null)
   const [vaultData, setVaultData] = useState<UserVaultResponse | null>(null)
   const [vaultLoading, setVaultLoading] = useState(false)
+  // Password reset: confirm first, then show the one-time password exactly once
+  const [resetUser, setResetUser] = useState<User | null>(null)
+  const [tempPassword, setTempPassword] = useState<string | null>(null)
+  const [resetting, setResetting] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     usersApi.list().then(({ data }) => setUsers(data)).finally(() => setLoading(false))
@@ -47,6 +53,34 @@ export default function AdminPage() {
     } catch (err: any) {
       toast.error(err.response?.data?.detail || 'Failed')
     }
+  }
+
+  const handleResetPassword = async () => {
+    if (!resetUser) return
+    setResetting(true)
+    try {
+      const { data } = await usersApi.resetPassword(resetUser.id)
+      setTempPassword(data.temporary_password)
+      setUsers((us) => us.map((u) => (u.id === resetUser.id ? { ...u, must_change_password: true } : u)))
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || 'Failed to reset password')
+    } finally {
+      setResetting(false)
+    }
+  }
+
+  const copyTempPassword = () => {
+    if (!tempPassword) return
+    navigator.clipboard.writeText(tempPassword)
+    setCopied(true)
+    toast.success('Copied!')
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const closeReset = () => {
+    setResetUser(null)
+    setTempPassword(null)
+    setCopied(false)
   }
 
   const openVault = async (user: User) => {
@@ -124,6 +158,9 @@ export default function AdminPage() {
                   {!user.is_active && (
                     <span className="text-[10px] bg-vault-danger/10 text-vault-danger border border-vault-danger/20 rounded px-1.5 py-0.5">Disabled</span>
                   )}
+                  {user.must_change_password && (
+                    <span className="text-[10px] bg-vault-accent/10 text-vault-accent border border-vault-accent/20 rounded px-1.5 py-0.5">Reset pending</span>
+                  )}
                 </div>
                 <p className="text-xs text-vault-muted truncate">{user.email}</p>
               </div>
@@ -163,6 +200,18 @@ export default function AdminPage() {
                 </Button>
               )}
 
+              {/* Reset password */}
+              {currentUser?.role === 'admin' && user.id !== currentUser.id && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setResetUser(user)}
+                  title="Reset password"
+                >
+                  <KeyRound size={14} />
+                </Button>
+              )}
+
               {/* Toggle active */}
               {currentUser?.role === 'admin' && user.id !== currentUser.id && (
                 <Button
@@ -178,6 +227,52 @@ export default function AdminPage() {
           ))}
         </div>
       )}
+
+      {/* ── Password reset modal ──────────────────────────────────── */}
+      <Modal
+        open={!!resetUser}
+        onClose={closeReset}
+        title={tempPassword ? 'Temporary password' : 'Reset password'}
+        maxWidth="max-w-md"
+      >
+        {resetUser && !tempPassword && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-vault-text">
+              Reset the password for <span className="font-medium">{resetUser.username}</span>{' '}
+              <span className="text-vault-muted">({resetUser.email})</span>?
+            </p>
+            <p className="text-xs text-vault-muted">
+              Their current password stops working immediately. You'll get a one-time password to
+              send them — when they log in with it they'll be asked to choose a new one.
+            </p>
+            <div className="flex justify-end gap-2">
+              <Button variant="ghost" size="sm" onClick={closeReset}>Cancel</Button>
+              <Button variant="danger" size="sm" onClick={handleResetPassword} loading={resetting}>
+                Reset password
+              </Button>
+            </div>
+          </div>
+        )}
+        {resetUser && tempPassword && (
+          <div className="flex flex-col gap-4">
+            <p className="text-sm text-vault-text">
+              Send this to <span className="font-medium">{resetUser.username}</span>. It won't be shown again.
+            </p>
+            <div className="flex items-center gap-2 rounded-xl border border-vault-border bg-vault-elevated px-3 py-2.5">
+              <code className="flex-1 font-mono text-sm text-vault-text select-all break-all">{tempPassword}</code>
+              <Button variant="ghost" size="sm" onClick={copyTempPassword} title="Copy">
+                {copied ? <Check size={14} /> : <Copy size={14} />}
+              </Button>
+            </div>
+            <p className="text-xs text-vault-muted">
+              On first login with this password they'll be taken straight to a screen to set their own.
+            </p>
+            <div className="flex justify-end">
+              <Button size="sm" onClick={closeReset}>Done</Button>
+            </div>
+          </div>
+        )}
+      </Modal>
 
       {/* ── Vault inspector panel ─────────────────────────────────── */}
       <AnimatePresence>

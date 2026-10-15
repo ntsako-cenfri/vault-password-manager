@@ -12,6 +12,7 @@ class UserOut(BaseModel):
     role: str
     is_active: bool
     totp_enabled: bool = False
+    must_change_password: bool = False
     created_at: datetime
 
     model_config = {"from_attributes": True}
@@ -30,3 +31,7 @@ class InviteOut(BaseModel):
     token: str
     invite_link: str
     expires_in_days: int = 7
+
+
+class AdminPasswordResetOut(BaseModel):
+    temporary_password: str

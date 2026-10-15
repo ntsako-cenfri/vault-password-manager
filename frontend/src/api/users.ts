@@ -15,4 +15,6 @@ export const usersApi = {
   toggleActive: (userId: string) => api.patch<User>(`/users/${userId}/toggle-active`),
   getUserVault: (userId: string) => api.get<UserVaultResponse>(`/users/${userId}/vault`),
   invite: (emails: string[]) => api.post<InviteResult[]>('/users/invite', { emails }),
+  resetPassword: (userId: string) =>
+    api.post<{ temporary_password: string }>(`/users/${userId}/reset-password`),
 }

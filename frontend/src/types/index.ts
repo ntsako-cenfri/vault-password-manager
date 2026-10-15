@@ -8,6 +8,7 @@ export interface User {
   role: UserRole
   is_active: boolean
   totp_enabled: boolean
+  must_change_password?: boolean
   created_at: string
 }
 

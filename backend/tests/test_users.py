@@ -109,3 +109,79 @@ async def test_admin_cannot_disable_self(client: AsyncClient):
         headers={"Authorization": f"Bearer {admin_token}"},
     )
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_admin_reset_password_forces_change_on_next_login(client: AsyncClient):
+    await create_admin(client)
+    admin_token = await login(client, "admin@vault.io", "AdminPass1")
+    user = await register_user(client, "reset@vault.io", "resetuser")
+
+    resp = await client.post(
+        f"/api/users/{user['id']}/reset-password",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 200
+    temp_pw = resp.json()["temporary_password"]
+
+    # Old password no longer works
+    old = await client.post(
+        "/api/auth/login", json={"email": "reset@vault.io", "password": "UserPass1!"}
+    )
+    assert old.status_code == 401
+
+    # Temp password logs in to the change-password challenge, not the app
+    resp = await client.post(
+        "/api/auth/login", json={"email": "reset@vault.io", "password": temp_pw}
+    )
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["password_change_required"] is True
+    assert body["access_token"] == ""
+
+    resp = await client.post(
+        "/api/auth/complete-password-change",
+        json={
+            "password_change_token": body["password_change_token"],
+            "new_password": "BrandNewPass9",
+        },
+    )
+    assert resp.status_code == 200
+    assert resp.json()["access_token"]
+
+    # New password now logs in normally; temp password is dead
+    assert await login(client, "reset@vault.io", "BrandNewPass9")
+    dead = await client.post(
+        "/api/auth/login", json={"email": "reset@vault.io", "password": temp_pw}
+    )
+    assert dead.status_code == 401
+
+
+@pytest.mark.asyncio
+async def test_non_admin_cannot_reset_password(client: AsyncClient):
+    await create_admin(client)
+    admin_token = await login(client, "admin@vault.io", "AdminPass1")
+    u1 = await register_user(client, "t1@vault.io", "t1user")
+    u2 = await register_user(client, "t2@vault.io", "t2user")
+    await client.patch(
+        f"/api/users/{u1['id']}/role",
+        json={"role": "team"},
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    team_token = await login(client, "t1@vault.io", "UserPass1!")
+    resp = await client.post(
+        f"/api/users/{u2['id']}/reset-password",
+        headers={"Authorization": f"Bearer {team_token}"},
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_admin_cannot_reset_own_password(client: AsyncClient):
+    admin = await create_admin(client)
+    admin_token = await login(client, "admin@vault.io", "AdminPass1")
+    resp = await client.post(
+        f"/api/users/{admin['id']}/reset-password",
+        headers={"Authorization": f"Bearer {admin_token}"},
+    )
+    assert resp.status_code == 400
