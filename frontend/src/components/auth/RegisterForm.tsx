@@ -79,6 +79,8 @@ export function RegisterForm({ onSwitchToLogin, shareToken, inviteToken }: Props
       <div className="relative">
         <Input
           label="Email"
+          name="email"
+          autoComplete="username"
           type="email"
           placeholder="you@company.com"
           value={email}
@@ -95,6 +97,8 @@ export function RegisterForm({ onSwitchToLogin, shareToken, inviteToken }: Props
 
       <Input
         label="Username"
+        name="display-name"
+        autoComplete="nickname"
         placeholder="yourname"
         value={username}
         onChange={(e) => setUsername(e.target.value)}
@@ -105,6 +109,8 @@ export function RegisterForm({ onSwitchToLogin, shareToken, inviteToken }: Props
       <div className="relative">
         <Input
           label="Password"
+          name="new-password"
+          autoComplete="new-password"
           type={showPw ? 'text' : 'password'}
           placeholder="Min 10 chars, uppercase & number"
           value={password}

@@ -1,4 +1,4 @@
-import { forwardRef } from 'react'
+import { forwardRef, useId } from 'react'
 import { clsx } from 'clsx'
 
 interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
@@ -7,27 +7,33 @@ interface InputProps extends React.InputHTMLAttributes<HTMLInputElement> {
 }
 
 export const Input = forwardRef<HTMLInputElement, InputProps>(
-  ({ label, error, className, ...props }, ref) => (
-    <div className="flex flex-col gap-1.5">
-      {label && (
-        <label className="text-xs font-medium text-vault-muted uppercase tracking-wider">
-          {label}
-        </label>
-      )}
-      <input
-        ref={ref}
-        className={clsx(
-          'w-full bg-vault-elevated border rounded-lg px-3 py-2 text-sm text-vault-text placeholder:text-vault-muted/50 outline-none transition-colors',
-          error
-            ? 'border-vault-danger focus:border-vault-danger'
-            : 'border-vault-border focus:border-vault-primary',
-          className,
+  ({ label, error, className, id, ...props }, ref) => {
+    // Linked labels are one of the signals browser password managers use to spot login fields
+    const autoId = useId()
+    const inputId = id ?? autoId
+    return (
+      <div className="flex flex-col gap-1.5">
+        {label && (
+          <label htmlFor={inputId} className="text-xs font-medium text-vault-muted uppercase tracking-wider">
+            {label}
+          </label>
         )}
-        {...props}
-      />
-      {error && <p className="text-xs text-vault-danger">{error}</p>}
-    </div>
-  ),
+        <input
+          ref={ref}
+          id={inputId}
+          className={clsx(
+            'w-full bg-vault-elevated border rounded-lg px-3 py-2 text-sm text-vault-text placeholder:text-vault-muted/50 outline-none transition-colors',
+            error
+              ? 'border-vault-danger focus:border-vault-danger'
+              : 'border-vault-border focus:border-vault-primary',
+            className,
+          )}
+          {...props}
+        />
+        {error && <p className="text-xs text-vault-danger">{error}</p>}
+      </div>
+    )
+  },
 )
 Input.displayName = 'Input'
 

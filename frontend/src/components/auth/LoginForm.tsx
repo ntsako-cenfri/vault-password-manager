@@ -107,9 +107,14 @@ export function LoginForm({ onSwitchToRegister }: Props) {
           </div>
         </div>
 
+        {/* Tells the password manager which saved login this new password replaces */}
+        <input type="email" name="email" autoComplete="username" value={email} readOnly hidden />
+
         <div className="relative">
           <Input
             label="New password"
+            name="new-password"
+            autoComplete="new-password"
             type={showNewPw ? 'text' : 'password'}
             placeholder="••••••••••"
             value={newPassword}
@@ -128,6 +133,8 @@ export function LoginForm({ onSwitchToRegister }: Props) {
 
         <Input
           label="Confirm new password"
+          name="confirm-password"
+          autoComplete="new-password"
           type={showNewPw ? 'text' : 'password'}
           placeholder="••••••••••"
           value={confirmPassword}
@@ -164,6 +171,8 @@ export function LoginForm({ onSwitchToRegister }: Props) {
 
         <Input
           label="Authenticator code"
+          name="totp"
+          autoComplete="one-time-code"
           type="text"
           inputMode="numeric"
           pattern="[0-9]{6}"
@@ -210,6 +219,8 @@ export function LoginForm({ onSwitchToRegister }: Props) {
 
       <Input
         label="Email"
+        name="email"
+        autoComplete="username"
         type="email"
         placeholder="you@company.com"
         value={email}
@@ -221,6 +232,8 @@ export function LoginForm({ onSwitchToRegister }: Props) {
       <div className="relative">
         <Input
           label="Password"
+          name="password"
+          autoComplete="current-password"
           type={showPw ? 'text' : 'password'}
           placeholder="••••••••••"
           value={password}
