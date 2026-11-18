@@ -2,7 +2,7 @@ import enum
 import uuid
 from datetime import datetime
 
-from sqlalchemy import Boolean, Column, DateTime, String
+from sqlalchemy import Boolean, Column, DateTime, Integer, String, Text
 from sqlalchemy.orm import relationship
 
 from app.database import Base
@@ -30,6 +30,26 @@ class User(Base):
     # forces them through the one-time change-password flow on next login,
     # instead of just handing them a working permanent password blind.
     must_change_password = Column(Boolean, default=False, nullable=False)
+    # Public-SFTP access, switched on/off by an admin on the Admin page. The host-side
+    # sftp-sync job turns (is_active AND sftp_enabled) users into SFTP accounts named
+    # sftp_username. The name is kept when access is switched off, so switching it back on
+    # restores the SAME account/folder. Switching off never deletes any folder or file.
+    sftp_enabled = Column(Boolean, default=False, nullable=False)
+    sftp_username = Column(String, nullable=True, unique=True)
+    # VPN (wg-easy WireGuard) access, switched on/off by an admin on the Admin page. The
+    # host-side vpn-sync job creates/enables the user's wg-easy client when
+    # (is_active AND vpn_enabled), disables it otherwise (never deletes it, so switching
+    # back on needs no new setup), and stores the client's setup here, encrypted with
+    # the Vault master key like any vault item (config text + QR code SVG).
+    vpn_enabled = Column(Boolean, default=False, nullable=False)
+    vpn_client_id = Column(Integer, nullable=True, unique=True)
+    vpn_config_key = Column(Text, nullable=True)   # per-user AES key, wrapped with the master key
+    vpn_config_enc = Column(Text, nullable=True)   # encrypted wg-quick config
+    vpn_qr_enc = Column(Text, nullable=True)       # encrypted QR code (SVG)
+
+    @property
+    def vpn_ready(self) -> bool:
+        return bool(self.vpn_config_enc)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at = Column(
         DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
