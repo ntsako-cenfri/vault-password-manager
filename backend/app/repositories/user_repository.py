@@ -22,6 +22,10 @@ class UserRepository:
         result = await self._db.execute(select(User).where(User.username == username))
         return result.scalar_one_or_none()
 
+    async def get_by_sftp_username(self, name: str) -> User | None:
+        result = await self._db.execute(select(User).where(User.sftp_username == name))
+        return result.scalar_one_or_none()
+
     async def list_all(self) -> list[User]:
         result = await self._db.execute(select(User).order_by(User.created_at))
         return list(result.scalars().all())

@@ -13,7 +13,10 @@ from app.schemas.user import (
     InviteOut,
     InviteRequest,
     RoleUpdateRequest,
+    SftpAccessRequest,
     UserOut,
+    VpnAccessRequest,
+    VpnConfigOut,
 )
 from app.schemas.vault import VaultItemOut
 from app.services.encryption_service import EncryptionService
@@ -36,9 +39,14 @@ async def list_users(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """Admin & Team can see user list; External cannot."""
+    """Admin & Team can see user list; External cannot.
+    SFTP/VPN access details are admin-only, so they are blanked for everyone else."""
     svc = UserService(db)
-    return await svc.list_users(current_user)
+    users = await svc.list_users(current_user)
+    if current_user.role == "admin":
+        return users
+    hidden = {"sftp_enabled": False, "sftp_username": None, "vpn_enabled": False, "vpn_ready": False}
+    return [UserOut.model_validate(u).model_copy(update=hidden) for u in users]
 
 
 @router.patch("/{user_id}/role", response_model=UserOut)
@@ -60,6 +68,41 @@ async def toggle_active(
 ):
     svc = UserService(db)
     return await svc.toggle_active(admin, user_id)
+
+
+@router.patch("/{user_id}/sftp", response_model=UserOut)
+async def set_sftp_access(
+    user_id: str,
+    body: SftpAccessRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin only: allow / stop public-SFTP access for a user. Never deletes any folder or file."""
+    svc = UserService(db)
+    return await svc.set_sftp_access(admin, user_id, body.enabled, body.username)
+
+
+@router.patch("/{user_id}/vpn", response_model=UserOut)
+async def set_vpn_access(
+    user_id: str,
+    body: VpnAccessRequest,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin only: allow / stop VPN access. Stopping only disables the VPN entry."""
+    svc = UserService(db)
+    return await svc.set_vpn_access(admin, user_id, body.enabled)
+
+
+@router.get("/{user_id}/vpn/config", response_model=VpnConfigOut)
+async def get_vpn_config(
+    user_id: str,
+    admin: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin only: the user's VPN setup (config file + QR code) to send to them."""
+    svc = UserService(db)
+    return await svc.get_vpn_config(admin, user_id, _enc)
 
 
 @router.post("/{user_id}/reset-password", response_model=AdminPasswordResetOut)

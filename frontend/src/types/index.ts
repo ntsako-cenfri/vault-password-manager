@@ -9,7 +9,18 @@ export interface User {
   is_active: boolean
   totp_enabled: boolean
   must_change_password?: boolean
+  sftp_enabled?: boolean
+  sftp_username?: string | null
+  vpn_enabled?: boolean
+  vpn_ready?: boolean
   created_at: string
+}
+
+export interface VpnConfig {
+  ready: boolean
+  filename: string | null
+  config: string | null
+  qr_svg: string | null
 }
 
 // ── Auth ──────────────────────────────────────────────────────────────────────
