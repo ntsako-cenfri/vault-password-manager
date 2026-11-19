@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Cenfri Vault certificate</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f4f5f7; --panel: #ffffff; --text: #16181d; --muted: #5f6470; --border: #e1e3e8;
+      --accent: #4f46e5; --accent-text: #ffffff; --code: #f0f1f4;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg: #0f1115; --panel: #171a21; --text: #e8e9ec; --muted: #9a9da6; --border: #2a2e38;
+              --accent: #818cf8; --accent-text: #0f1115; --code: #1f232c; }
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); line-height: 1.55;
+           font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+    main { max-width: 680px; margin: 0 auto; padding: 24px 16px 48px; }
+    .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 22px 20px; }
+    h1 { font-size: 1.35rem; margin: 0 0 6px; }
+    h2 { font-size: 1.02rem; margin: 26px 0 6px; }
+    p { margin: 6px 0; }
+    .muted { color: var(--muted); font-size: .92rem; }
+    a.button { display: block; text-align: center; margin: 18px 0 8px; padding: 14px 18px; border-radius: 10px;
+               background: var(--accent); color: var(--accent-text); font-weight: 650; text-decoration: none; font-size: 1.02rem; }
+    ol { padding-left: 1.3rem; margin: 6px 0; }
+    li { margin: 4px 0; }
+    code { background: var(--code); border-radius: 6px; padding: 2px 6px; font-size: .86rem; word-break: break-all; }
+    .fp { display: block; margin-top: 6px; padding: 10px 12px; background: var(--code); border-radius: 8px;
+          font-family: ui-monospace, Menlo, Consolas, monospace; font-size: .8rem; word-break: break-all; }
+  </style>
+</head>
+<body>
+<main>
+  <div class="panel">
+    <h1>Cenfri Vault certificate</h1>
+    <p class="muted">Install this once per device so the browser trusts the password manager at
+      <code>https://10.10.108.68</code>. Without it you get a "Not secure / connection is not private" warning and the
+      browser won't offer to save your password.</p>
+
+    <a class="button" href="/cenfri-ca.crt" download="Cenfri-Vault-Root-CA.crt">Download the certificate</a>
+    <p class="muted">It is a public certificate. It can only vouch for the Cenfri servers
+      (10.10.108.68, 197.243.26.148, 10.200.200.1), nothing else on the internet.</p>
+
+    <h2>iPhone / iPad</h2>
+    <ol>
+      <li>Open this page in <strong>Safari</strong> and tap <strong>Download the certificate</strong>, then <strong>Allow</strong>.</li>
+      <li>Open <strong>Settings</strong> → <strong>Profile Downloaded</strong> (near the top) → <strong>Install</strong> → enter your passcode → <strong>Install</strong>.</li>
+      <li><strong>Important:</strong> Settings → General → About → <strong>Certificate Trust Settings</strong> → switch on <strong>Cenfri Vault Root CA</strong>.</li>
+    </ol>
+
+    <h2>Android</h2>
+    <ol>
+      <li>Tap <strong>Download the certificate</strong>.</li>
+      <li>Settings → Security (or "Security &amp; privacy") → More security settings → Encryption &amp; credentials →
+        <strong>Install a certificate</strong> → <strong>CA certificate</strong> → <strong>Install anyway</strong> → pick the downloaded file.</li>
+      <li>The menu names differ a little between phone makers — search Settings for "certificate" if you can't find it.</li>
+    </ol>
+
+    <h2>Mac</h2>
+    <ol>
+      <li>Download, then double-click the file — it opens in Keychain Access.</li>
+      <li>Double-click <strong>Cenfri Vault Root CA</strong> → <strong>Trust</strong> → "When using this certificate": <strong>Always Trust</strong> → close and enter your Mac password.</li>
+      <li>Quit and reopen the browser (Cmd+Q).</li>
+    </ol>
+
+    <h2>Windows</h2>
+    <ol>
+      <li>Download, then double-click the file → <strong>Install Certificate</strong> → <strong>Local Machine</strong>.</li>
+      <li>Choose <strong>Place all certificates in the following store</strong> → <strong>Trusted Root Certification Authorities</strong> → Finish.</li>
+      <li>Close and reopen the browser.</li>
+    </ol>
+
+    <h2>Firefox (any computer)</h2>
+    <p>Firefox keeps its own list: Settings → Privacy &amp; Security → Certificates → <strong>View Certificates</strong> →
+      Authorities → <strong>Import</strong> → tick "Trust this CA to identify websites".</p>
+
+    <h2>Check it's the right file</h2>
+    <p class="muted">SHA-256 fingerprint (shown in the certificate details after you open it):</p>
+    <span class="fp">1B:EF:64:18:4C:B9:EC:87:70:DC:08:F1:22:7B:AE:2E:60:A6:78:1A:45:A1:55:67:8A:63:74:8C:1D:DE:B8:A5</span>
+    <p class="muted" style="margin-top:14px">Valid until 15 November 2036. When it works, <code>https://10.10.108.68</code> opens with a normal padlock.</p>
+  </div>
+</main>
+</body>
+</html>
